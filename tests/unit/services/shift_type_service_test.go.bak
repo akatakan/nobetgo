@@ -1,0 +1,97 @@
+package services_test
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/akatakan/nobetgo/internal/core"
+	"github.com/akatakan/nobetgo/internal/services"
+	mocks "github.com/akatakan/nobetgo/tests/mocks/repositories"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestCreateShiftType(t *testing.T) {
+	mockRepo := new(mocks.MockShiftTypeRepository)
+	service := services.NewShiftTypeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		shiftType := &core.ShiftType{Name: "Night Shift"}
+		mockRepo.On("Create", shiftType).Return(nil)
+
+		err := service.CreateShiftType(shiftType)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		shiftType := &core.ShiftType{Name: "Day Shift"}
+		mockRepo.On("Create", shiftType).Return(errors.New("db error"))
+
+		err := service.CreateShiftType(shiftType)
+
+		assert.Error(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetShiftTypeByID(t *testing.T) {
+	mockRepo := new(mocks.MockShiftTypeRepository)
+	service := services.NewShiftTypeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		shiftType := &core.ShiftType{Name: "Night Shift"}
+		mockRepo.On("GetByID", uint(1)).Return(shiftType, nil)
+
+		result, err := service.GetShiftTypeByID(1)
+
+		assert.NoError(t, err)
+		assert.Equal(t, shiftType, result)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetAllShiftTypes(t *testing.T) {
+	mockRepo := new(mocks.MockShiftTypeRepository)
+	service := services.NewShiftTypeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		shifts := []core.ShiftType{{Name: "Night"}, {Name: "Day"}}
+		mockRepo.On("List").Return(shifts, nil)
+
+		result, err := service.GetAllShiftTypes()
+
+		assert.NoError(t, err)
+		assert.Equal(t, len(shifts), len(result))
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestUpdateShiftType(t *testing.T) {
+	mockRepo := new(mocks.MockShiftTypeRepository)
+	service := services.NewShiftTypeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		shiftType := &core.ShiftType{Name: "Updated Shift"}
+		mockRepo.On("Update", shiftType).Return(nil)
+
+		err := service.UpdateShiftType(shiftType)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestDeleteShiftType(t *testing.T) {
+	mockRepo := new(mocks.MockShiftTypeRepository)
+	service := services.NewShiftTypeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.On("Delete", uint(1)).Return(nil)
+
+		err := service.DeleteShiftType(1)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}

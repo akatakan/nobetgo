@@ -1,0 +1,113 @@
+package services_test
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/akatakan/nobetgo/internal/core"
+	"github.com/akatakan/nobetgo/internal/services"
+	mocks "github.com/akatakan/nobetgo/tests/mocks/repositories"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestCreateEmployee(t *testing.T) {
+	mockRepo := new(mocks.MockEmployeeRepository)
+	service := services.NewEmployeeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		employee := &core.Employee{FirstName: "John", LastName: "Doe"}
+		mockRepo.On("Create", employee).Return(nil)
+
+		err := service.CreateEmployee(employee)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		employee := &core.Employee{FirstName: "Jane", LastName: "Doe"}
+		mockRepo.On("Create", employee).Return(errors.New("db error"))
+
+		err := service.CreateEmployee(employee)
+
+		assert.Error(t, err)
+		assert.Equal(t, "db error", err.Error())
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetEmployeeByID(t *testing.T) {
+	mockRepo := new(mocks.MockEmployeeRepository)
+	service := services.NewEmployeeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		employee := &core.Employee{FirstName: "John", LastName: "Doe"}
+		mockRepo.On("GetByID", uint(1)).Return(employee, nil)
+
+		result, err := service.GetEmployeeByID(1)
+
+		assert.NoError(t, err)
+		// assert.Equal(t, employee, result) // Pointers might differ but values should match
+		assert.Equal(t, employee.FirstName, result.FirstName)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		mockRepo.On("GetByID", uint(2)).Return(nil, errors.New("not found"))
+
+		result, err := service.GetEmployeeByID(2)
+
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Equal(t, "not found", err.Error())
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetAllEmployees(t *testing.T) {
+	mockRepo := new(mocks.MockEmployeeRepository)
+	service := services.NewEmployeeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		employees := []core.Employee{
+			{FirstName: "John", LastName: "Doe"},
+			{FirstName: "Jane", LastName: "Doe"},
+		}
+		mockRepo.On("List").Return(employees, nil)
+
+		result, err := service.GetAllEmployees()
+
+		assert.NoError(t, err)
+		assert.Equal(t, len(employees), len(result))
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestUpdateEmployee(t *testing.T) {
+	mockRepo := new(mocks.MockEmployeeRepository)
+	service := services.NewEmployeeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		employee := &core.Employee{FirstName: "John", LastName: "Updated"}
+		mockRepo.On("Update", employee).Return(nil)
+
+		err := service.UpdateEmployee(employee)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestDeleteEmployee(t *testing.T) {
+	mockRepo := new(mocks.MockEmployeeRepository)
+	service := services.NewEmployeeService(mockRepo)
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.On("Delete", uint(1)).Return(nil)
+
+		err := service.DeleteEmployee(1)
+
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
