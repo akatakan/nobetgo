@@ -99,7 +99,7 @@ func main() {
 		{
 			schedules.POST("/generate", scheduleHandler.GenerateSchedule)
 			schedules.PUT("/:id", scheduleHandler.UpdateSchedule)
-			// schedules.GET("", scheduleHandler.GetSchedule)
+			schedules.GET("", scheduleHandler.GetSchedule)
 		}
 
 		attendance := api.Group("/attendance")

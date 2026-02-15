@@ -81,6 +81,10 @@ func (s *SchedulerService) GenerateSchedule(req core.ScheduleRequest) ([]core.Sc
 	return bestSchedule, nil
 }
 
+func (s *SchedulerService) GetMonthlySchedule(month, year int) ([]core.Schedule, error) {
+	return s.repo.GetCombinedSchedule(month, year)
+}
+
 func (s *SchedulerService) UpdateSchedule(id uint, req core.Schedule) (*core.Schedule, error) {
 	req.ID = id
 	if err := s.repo.Update(&req); err != nil {

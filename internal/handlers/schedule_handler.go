@@ -54,22 +54,13 @@ func (h *ScheduleHandler) GetSchedule(c *gin.Context) {
 		return
 	}
 
-	// Assuming SchedulerService also has a GetSchedule method, but currently it only has GenerateSchedule.
-	// Since Generate return created schedules, maybe we should add Get to Service too?
-	// But Repository has GetCombinedSchedule.
-	// Let's add simple direct call if service doesn't have it, or expand service.
-	// Wait, SchedulerService interface for repo has GetCombinedSchedule.
-	// Let's assume we should add GetSchedule to SchedulerService as well?
-	// But I implemented `GenerateSchedule` only in previous steps.
-	// I should probably add `GetSchedule` to service or expose repo method via service.
-	// For now, let's leave this method empty or implement it via a new Service method I'll add.
-	// Or I can add `GetMonthlySchedule` to `SchedulerService`.
+	schedules, err := h.service.GetMonthlySchedule(month, year)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "Not implemented yet",
-		"month": month,
-		"year":  year,
-	})
+	c.JSON(http.StatusOK, schedules)
 }
 
 func (h *ScheduleHandler) UpdateSchedule(c *gin.Context) {
