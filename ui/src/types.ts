@@ -6,11 +6,18 @@ export interface BaseModel {
   DeletedAt: string | null;
 }
 
+export interface Department extends BaseModel {
+  Name: string;
+  Floor: number;
+  Description: string;
+}
+
 export interface Employee extends BaseModel {
   FirstName: string;
   LastName: string;
   Title: string;
-  Department: string;
+  DepartmentID: number;
+  Department: Department;
   Email: string;
   Phone: string;
   HourlyRate: number;
@@ -29,8 +36,10 @@ export interface Schedule extends BaseModel {
   Date: string;
   EmployeeID: number;
   ShiftTypeID: number;
+  DepartmentID: number;
   Employee: Employee;
   ShiftType: ShiftType;
+  Department: Department;
   IsLocked: boolean;
 }
 
@@ -47,6 +56,7 @@ export interface Attendance extends BaseModel {
 export interface ScheduleRequest {
   month: number;
   year: number;
+  department_id: number;
   overtime_threshold: number;
   overtime_multiplier: number;
 }
@@ -55,7 +65,7 @@ export interface EmployeeFormData {
   FirstName: string;
   LastName: string;
   Title: string;
-  Department: string;
+  DepartmentID: number;
   Email: string;
   Phone: string;
   HourlyRate: number;
@@ -66,5 +76,11 @@ export interface ShiftTypeFormData {
   StartTime: string;
   EndTime: string;
   Color: string;
+  Description: string;
+}
+
+export interface DepartmentFormData {
+  Name: string;
+  Floor: number;
   Description: string;
 }

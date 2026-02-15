@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Employee, ShiftType, Schedule, Attendance, ScheduleRequest, EmployeeFormData, ShiftTypeFormData } from '../types';
+import type { Employee, ShiftType, Schedule, Attendance, ScheduleRequest, EmployeeFormData, ShiftTypeFormData, Department, DepartmentFormData } from '../types';
 
 const API_BASE_URL = 'http://localhost:8080/api/v1';
 
@@ -9,6 +9,14 @@ const api = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+export const departmentApi = {
+    list: () => api.get<Department[]>('/departments'),
+    getById: (id: number) => api.get<Department>(`/departments/${id}`),
+    create: (data: DepartmentFormData) => api.post<Department>('/departments', data),
+    update: (id: number, data: Partial<DepartmentFormData>) => api.put<Department>(`/departments/${id}`, data),
+    delete: (id: number) => api.delete(`/departments/${id}`),
+};
 
 export const employeeApi = {
     list: () => api.get<Employee[]>('/employees'),
@@ -28,15 +36,16 @@ export const shiftTypeApi = {
 
 export const scheduleApi = {
     generate: (data: ScheduleRequest) => api.post<Schedule[]>('/schedules/generate', data),
-    getMonthly: (month: number, year: number) => api.get<Schedule[]>(`/schedules?month=${month}&year=${year}`),
+    getMonthly: (month: number, year: number, departmentId?: number) =>
+        api.get<Schedule[]>(`/schedules?month=${month}&year=${year}${departmentId ? `&department_id=${departmentId}` : ''}`),
     update: (id: number, data: Partial<Schedule>) => api.put<Schedule>(`/schedules/${id}`, data),
 };
 
 export const attendanceApi = {
     log: (data: { schedule_id: number; actual_start_time: string; actual_end_time: string; notes?: string }) =>
         api.post<Attendance>('/attendance', data),
-    getReport: (month: number, year: number) =>
-        api.get<Attendance[]>(`/attendance/reports?month=${month}&year=${year}`),
+    getReport: (month: number, year: number, departmentId?: number) =>
+        api.get<Attendance[]>(`/attendance/reports?month=${month}&year=${year}${departmentId ? `&department_id=${departmentId}` : ''}`),
 };
 
 export default api;

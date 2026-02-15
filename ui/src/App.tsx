@@ -1,29 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Clock, Calendar, BarChart3, Settings, Wand2, TrendingUp, Activity } from 'lucide-react';
+import { Users, Clock, Calendar, BarChart3, Settings, Wand2, TrendingUp, Activity, Building2, ClipboardCheck } from 'lucide-react';
 import EmployeeManager from './components/EmployeeManager';
 import ShiftTypeManager from './components/ShiftTypeManager';
 import ScheduleWizard from './components/ScheduleWizard';
 import ScheduleViewer from './components/ScheduleViewer';
-import { employeeApi, shiftTypeApi, scheduleApi } from './services/api';
+import DepartmentManager from './components/DepartmentManager';
+import AttendanceManager from './components/AttendanceManager';
+import OvertimeReport from './components/OvertimeReport';
+import { employeeApi, shiftTypeApi, scheduleApi, departmentApi } from './services/api';
 import './App.css';
 
 // Dynamic Dashboard
 const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
-  const [stats, setStats] = useState({ employees: 0, shifts: 0, schedules: 0 });
+  const [stats, setStats] = useState({ employees: 0, shifts: 0, schedules: 0, departments: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [empRes, shiftRes, schedRes] = await Promise.allSettled([
+        const [empRes, shiftRes, schedRes, deptRes] = await Promise.allSettled([
           employeeApi.list(),
           shiftTypeApi.list(),
           scheduleApi.getMonthly(new Date().getMonth() + 1, new Date().getFullYear()),
+          departmentApi.list(),
         ]);
         setStats({
           employees: empRes.status === 'fulfilled' ? empRes.value.data.length : 0,
           shifts: shiftRes.status === 'fulfilled' ? shiftRes.value.data.length : 0,
           schedules: schedRes.status === 'fulfilled' ? schedRes.value.data.length : 0,
+          departments: deptRes.status === 'fulfilled' ? deptRes.value.data.length : 0,
         });
       } catch { }
       setLoading(false);
@@ -32,6 +37,15 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
   }, []);
 
   const statCards = [
+    {
+      label: 'Bölümler',
+      value: stats.departments,
+      icon: Building2,
+      gradient: 'from-emerald-500/10 to-teal-500/10',
+      borderColor: 'border-emerald-500/20',
+      iconColor: 'text-emerald-400',
+      valueColor: 'text-emerald-400',
+    },
     {
       label: 'Toplam Personel',
       value: stats.employees,
@@ -64,7 +78,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {statCards.map((card, idx) => (
           <div
             key={idx}
@@ -102,7 +116,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
                 Otomatik Planlama
               </h3>
               <p className="text-sm text-gray-400">
-                AI destekli optimizasyon ile nöbet çizelgesi oluşturun
+                Bölüm bazlı AI destekli optimizasyon ile nöbet çizelgesi oluşturun
               </p>
             </div>
             <TrendingUp className="w-5 h-5 text-gray-600 ml-auto group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
@@ -123,7 +137,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
                 Nöbet Takvimi
               </h3>
               <p className="text-sm text-gray-400">
-                Mevcut nöbet çizelgesini takvim görünümünde inceleyin
+                Bölüm bazlı nöbet çizelgesini takvim görünümünde inceleyin
               </p>
             </div>
             <Activity className="w-5 h-5 text-gray-600 ml-auto group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
@@ -147,10 +161,13 @@ const SettingsPage: React.FC = () => (
 
 const SUBTITLES: Record<string, string> = {
   dashboard: 'Genel bakış ve hızlı işlemler',
+  departments: 'Kat ve bölüm tanımlarını yönetin',
   schedule: 'Aylık nöbet takvimini görüntüleyin',
   employees: 'Personel kaydı oluşturun ve yönetin',
   shifts: 'Nöbet tiplerini tanımlayın',
   scheduler: 'Akıllı algoritmalarla nöbet çizelgesi oluşturun',
+  attendance: 'Nöbet giriş-çıkış kayıtlarını yönetin',
+  overtime: 'Ek mesai ve maliyet analizini görüntüleyin',
   settings: 'Uygulama ayarlarını yönetin',
 };
 
@@ -159,10 +176,13 @@ const App: React.FC = () => {
 
   const navItems = [
     { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+    { id: 'departments', icon: Building2, label: 'Bölümler' },
     { id: 'schedule', icon: Calendar, label: 'Nöbet Takvimi' },
     { id: 'employees', icon: Users, label: 'Personel' },
     { id: 'shifts', icon: Clock, label: 'Nöbet Tipleri' },
     { id: 'scheduler', icon: Wand2, label: 'Otomatik Planla' },
+    { id: 'attendance', icon: ClipboardCheck, label: 'Puantaj' },
+    { id: 'overtime', icon: TrendingUp, label: 'Ek Mesai' },
     { id: 'settings', icon: Settings, label: 'Ayarlar' },
   ];
 
@@ -206,7 +226,7 @@ const App: React.FC = () => {
         {/* Bottom */}
         <div className="p-4 border-t border-white/[0.04]">
           <div className="text-xs text-gray-600 text-center">
-            NöbetGo v0.1.0
+            NöbetGo v0.2.0
           </div>
         </div>
       </aside>
@@ -224,10 +244,13 @@ const App: React.FC = () => {
 
         <div className="p-8">
           {activeTab === 'dashboard' && <DashboardOverview onNavigate={setActiveTab} />}
+          {activeTab === 'departments' && <DepartmentManager />}
           {activeTab === 'schedule' && <ScheduleViewer />}
           {activeTab === 'employees' && <EmployeeManager />}
           {activeTab === 'shifts' && <ShiftTypeManager />}
           {activeTab === 'scheduler' && <ScheduleWizard onNavigate={setActiveTab} />}
+          {activeTab === 'attendance' && <AttendanceManager />}
+          {activeTab === 'overtime' && <OvertimeReport />}
           {activeTab === 'settings' && <SettingsPage />}
         </div>
       </main>

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, User, Pencil, Trash2, Search, Loader2, Mail, Phone, AlertTriangle } from 'lucide-react';
-import { employeeApi } from '../services/api';
-import type { Employee, EmployeeFormData } from '../types';
+import { employeeApi, departmentApi } from '../services/api';
+import type { Employee, EmployeeFormData, Department } from '../types';
 
 const emptyForm: EmployeeFormData = {
     FirstName: '',
     LastName: '',
     Title: '',
-    Department: '',
+    DepartmentID: 0,
     Email: '',
     Phone: '',
     HourlyRate: 50,
@@ -15,19 +15,25 @@ const emptyForm: EmployeeFormData = {
 
 const EmployeeManager: React.FC = () => {
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [departments, setDepartments] = useState<Department[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [formData, setFormData] = useState<EmployeeFormData>({ ...emptyForm });
     const [search, setSearch] = useState('');
+    const [filterDept, setFilterDept] = useState<number>(0);
     const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
 
     const fetchEmployees = async () => {
         setLoading(true);
         try {
-            const res = await employeeApi.list();
-            setEmployees(res.data);
+            const [empRes, deptRes] = await Promise.all([
+                employeeApi.list(),
+                departmentApi.list(),
+            ]);
+            setEmployees(empRes.data);
+            setDepartments(deptRes.data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -65,7 +71,7 @@ const EmployeeManager: React.FC = () => {
             FirstName: emp.FirstName,
             LastName: emp.LastName,
             Title: emp.Title,
-            Department: emp.Department,
+            DepartmentID: emp.DepartmentID,
             Email: emp.Email,
             Phone: emp.Phone,
             HourlyRate: emp.HourlyRate,
@@ -89,14 +95,20 @@ const EmployeeManager: React.FC = () => {
         setFormData({ ...emptyForm });
     };
 
+    const getDeptName = (deptId: number) => {
+        const dept = departments.find(d => d.ID === deptId);
+        return dept ? `${dept.Floor}. Kat - ${dept.Name}` : '';
+    };
+
     const filtered = employees.filter((emp) => {
         const q = search.toLowerCase();
-        return (
+        const matchSearch =
             emp.FirstName.toLowerCase().includes(q) ||
             emp.LastName.toLowerCase().includes(q) ||
-            emp.Department.toLowerCase().includes(q) ||
-            emp.Title.toLowerCase().includes(q)
-        );
+            getDeptName(emp.DepartmentID).toLowerCase().includes(q) ||
+            emp.Title.toLowerCase().includes(q);
+        const matchDept = filterDept === 0 || emp.DepartmentID === filterDept;
+        return matchSearch && matchDept;
     });
 
     return (
@@ -107,6 +119,16 @@ const EmployeeManager: React.FC = () => {
                     <span className="text-sm font-normal text-gray-500 ml-2">({employees.length})</span>
                 </h2>
                 <div className="flex items-center gap-3">
+                    <select
+                        className="glass-input py-2 px-3 text-sm"
+                        value={filterDept}
+                        onChange={(e) => setFilterDept(Number(e.target.value))}
+                    >
+                        <option value={0}>Tüm Bölümler</option>
+                        {departments.map((d) => (
+                            <option key={d.ID} value={d.ID}>{d.Floor}. Kat - {d.Name}</option>
+                        ))}
+                    </select>
                     <div className="relative">
                         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                         <input
@@ -163,13 +185,18 @@ const EmployeeManager: React.FC = () => {
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs text-gray-400 font-medium">Bölüm</label>
-                            <input
-                                placeholder="Bölüm"
+                            <label className="text-xs text-gray-400 font-medium">Bölüm *</label>
+                            <select
                                 className="glass-input w-full"
-                                value={formData.Department}
-                                onChange={(e) => setFormData({ ...formData, Department: e.target.value })}
-                            />
+                                value={formData.DepartmentID}
+                                onChange={(e) => setFormData({ ...formData, DepartmentID: Number(e.target.value) })}
+                                required
+                            >
+                                <option value={0} disabled>Bölüm Seçin</option>
+                                {departments.map((d) => (
+                                    <option key={d.ID} value={d.ID}>{d.Floor}. Kat - {d.Name}</option>
+                                ))}
+                            </select>
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs text-gray-400 font-medium">E-posta</label>
@@ -222,7 +249,7 @@ const EmployeeManager: React.FC = () => {
             ) : filtered.length === 0 ? (
                 <div className="text-center py-16 text-gray-500">
                     <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>{search ? 'Arama sonucu bulunamadı.' : 'Henüz personel eklenmemiş.'}</p>
+                    <p>{search || filterDept ? 'Arama sonucu bulunamadı.' : 'Henüz personel eklenmemiş.'}</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -241,7 +268,7 @@ const EmployeeManager: React.FC = () => {
                                         {emp.FirstName} {emp.LastName}
                                     </div>
                                     <div className="text-gray-400 text-sm truncate">
-                                        {emp.Title}{emp.Title && emp.Department ? ' · ' : ''}{emp.Department}
+                                        {emp.Title}{emp.Title && emp.DepartmentID ? ' · ' : ''}{getDeptName(emp.DepartmentID)}
                                     </div>
                                     <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
                                         {emp.Email && (

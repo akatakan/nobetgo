@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wand2, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
-import { scheduleApi } from '../services/api';
-import type { ScheduleRequest } from '../types';
+import { scheduleApi, departmentApi } from '../services/api';
+import type { ScheduleRequest, Department } from '../types';
 
 interface Props {
     onNavigate?: (tab: string) => void;
@@ -10,13 +10,19 @@ interface Props {
 const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [departments, setDepartments] = useState<Department[]>([]);
     const [params, setParams] = useState<ScheduleRequest>({
         month: new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2,
         year: new Date().getMonth() + 2 > 12 ? new Date().getFullYear() + 1 : new Date().getFullYear(),
+        department_id: 0,
         overtime_threshold: 45,
         overtime_multiplier: 1.5,
     });
     const [resultCount, setResultCount] = useState(0);
+
+    useEffect(() => {
+        departmentApi.list().then(res => setDepartments(res.data)).catch(console.error);
+    }, []);
 
     const MONTHS_TR = [
         'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
@@ -24,6 +30,10 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
     ];
 
     const handleGenerate = async () => {
+        if (!params.department_id) {
+            alert('Lütfen bir bölüm seçin.');
+            return;
+        }
         setLoading(true);
         try {
             const res = await scheduleApi.generate(params);
@@ -35,6 +45,8 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
             setLoading(false);
         }
     };
+
+    const selectedDept = departments.find(d => d.ID === params.department_id);
 
     return (
         <div className="max-w-2xl mx-auto py-8">
@@ -71,7 +83,7 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
                         Akıllı Nöbet Planlayıcı
                     </h3>
                     <p className="text-gray-400 max-w-md mx-auto">
-                        Algoritmamız personelin haftalık çalışma saatlerini ve maliyeti optimize ederek en ideal listeyi oluşturur.
+                        Algoritmamız seçtiğiniz bölümün personelinin haftalık çalışma saatlerini ve maliyeti optimize ederek en ideal listeyi oluşturur.
                     </p>
                     <button
                         onClick={() => setStep(2)}
@@ -86,6 +98,20 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
                 <div className="glass-card p-8 animate-slide-up">
                     <h3 className="text-xl font-bold mb-6">Planlama Parametreleri</h3>
                     <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2 col-span-2">
+                            <label className="text-sm text-gray-400 font-medium">Bölüm *</label>
+                            <select
+                                className="glass-input w-full"
+                                value={params.department_id}
+                                onChange={(e) => setParams({ ...params, department_id: Number(e.target.value) })}
+                                required
+                            >
+                                <option value={0} disabled>Bölüm Seçin</option>
+                                {departments.map((d) => (
+                                    <option key={d.ID} value={d.ID}>{d.Floor}. Kat - {d.Name}</option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="space-y-2">
                             <label className="text-sm text-gray-400 font-medium">Yıl</label>
                             <input
@@ -131,7 +157,7 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
                         <button onClick={() => setStep(1)} className="btn-ghost">Geri</button>
                         <button
                             onClick={handleGenerate}
-                            disabled={loading}
+                            disabled={loading || !params.department_id}
                             className="btn-success flex-1 justify-center py-3 text-lg"
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
@@ -148,6 +174,8 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
                     </div>
                     <h3 className="text-2xl font-bold text-white">Çizelge Başarıyla Oluşturuldu!</h3>
                     <p className="text-gray-400">
+                        {selectedDept && <span className="text-blue-400 font-semibold">{selectedDept.Floor}. Kat - {selectedDept.Name}</span>}
+                        {' '}bölümü için{' '}
                         <span className="text-green-400 font-bold text-lg">{resultCount}</span> adet nöbet ataması optimize edilerek kaydedildi.
                     </p>
                     <div className="flex gap-4 justify-center mt-8">

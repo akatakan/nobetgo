@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Loader2 } from 'lucide-react';
-import { scheduleApi } from '../services/api';
-import type { Schedule } from '../types';
+import { scheduleApi, departmentApi } from '../services/api';
+import type { Schedule, Department } from '../types';
 
 const DAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const MONTHS_TR = [
@@ -15,11 +15,22 @@ const ScheduleViewer: React.FC = () => {
     const [year, setYear] = useState(now.getFullYear());
     const [data, setData] = useState<Schedule[]>([]);
     const [loading, setLoading] = useState(true);
+    const [departments, setDepartments] = useState<Department[]>([]);
+    const [selectedDept, setSelectedDept] = useState<number>(0);
+
+    useEffect(() => {
+        departmentApi.list().then(res => {
+            setDepartments(res.data);
+            if (res.data.length > 0 && selectedDept === 0) {
+                setSelectedDept(res.data[0].ID);
+            }
+        }).catch(console.error);
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await scheduleApi.getMonthly(month, year);
+            const res = await scheduleApi.getMonthly(month, year, selectedDept || undefined);
             setData(res.data || []);
         } catch (err) {
             console.error(err);
@@ -31,7 +42,7 @@ const ScheduleViewer: React.FC = () => {
 
     useEffect(() => {
         fetchData();
-    }, [month, year]);
+    }, [month, year, selectedDept]);
 
     const prevMonth = () => {
         if (month === 1) { setMonth(12); setYear(year - 1); }
@@ -66,11 +77,25 @@ const ScheduleViewer: React.FC = () => {
     const isToday = (day: number) =>
         day === today.getDate() && month === today.getMonth() + 1 && year === today.getFullYear();
 
+    const currentDept = departments.find(d => d.ID === selectedDept);
+
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header */}
             <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Nöbet Takvimi</h2>
+                <div className="flex items-center gap-4">
+                    <h2 className="text-xl font-semibold">Nöbet Takvimi</h2>
+                    <select
+                        className="glass-input py-1.5 px-3 text-sm"
+                        value={selectedDept}
+                        onChange={(e) => setSelectedDept(Number(e.target.value))}
+                    >
+                        <option value={0}>Tüm Bölümler</option>
+                        {departments.map((d) => (
+                            <option key={d.ID} value={d.ID}>{d.Floor}. Kat - {d.Name}</option>
+                        ))}
+                    </select>
+                </div>
                 <div className="flex items-center gap-2">
                     <button onClick={prevMonth} className="btn-ghost p-2">
                         <ChevronLeft className="w-4 h-4" />
@@ -152,6 +177,11 @@ const ScheduleViewer: React.FC = () => {
             {/* Stats */}
             {!loading && (
                 <div className="flex gap-4 text-sm text-gray-400 animate-slide-up">
+                    {currentDept && (
+                        <div className="glass-card px-4 py-2">
+                            Bölüm: <span className="text-blue-400 font-semibold">{currentDept.Floor}. Kat - {currentDept.Name}</span>
+                        </div>
+                    )}
                     <div className="glass-card px-4 py-2">
                         <Calendar className="w-4 h-4 inline mr-2" />
                         Toplam: <span className="text-white font-semibold">{data.length}</span> nöbet
