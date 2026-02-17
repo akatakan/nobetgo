@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Clock, Calendar, BarChart3, Settings, Wand2, TrendingUp, Activity, Building2, ClipboardCheck } from 'lucide-react';
+import { Users, Clock, Calendar, BarChart3, Settings, Wand2, TrendingUp, Activity, Building2, ClipboardCheck, Award } from 'lucide-react';
 import EmployeeManager from './components/EmployeeManager';
 import ShiftTypeManager from './components/ShiftTypeManager';
 import ScheduleWizard from './components/ScheduleWizard';
@@ -7,6 +7,7 @@ import ScheduleViewer from './components/ScheduleViewer';
 import DepartmentManager from './components/DepartmentManager';
 import AttendanceManager from './components/AttendanceManager';
 import OvertimeReport from './components/OvertimeReport';
+import TitleManager from './components/TitleManager';
 import { employeeApi, shiftTypeApi, scheduleApi, departmentApi } from './services/api';
 import './App.css';
 
@@ -65,7 +66,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
       valueColor: 'text-purple-400',
     },
     {
-      label: 'Nöbet Tipleri',
+      label: 'Çalışma Tipleri',
       value: stats.shifts,
       icon: Clock,
       gradient: 'from-amber-500/10 to-orange-500/10',
@@ -148,13 +149,17 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
   );
 };
 
-// Settings Page
+// Settings Page with Title Management
 const SettingsPage: React.FC = () => (
-  <div className="space-y-6 animate-fade-in">
-    <div className="glass-card p-8 text-center">
-      <Settings className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-      <h3 className="text-xl font-semibold text-gray-300 mb-2">Ayarlar</h3>
-      <p className="text-gray-500">Bu bölüm yakında aktif olacaktır.</p>
+  <div className="space-y-8 animate-fade-in">
+    {/* Title Management Section */}
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        <Award className="w-5 h-5 text-violet-400" />
+        <h3 className="text-lg font-semibold text-gray-200">Ünvan Yönetimi</h3>
+      </div>
+      <p className="text-sm text-gray-500 mb-4">Personel eklerken seçilebilecek ünvanları buradan yönetebilirsiniz.</p>
+      <TitleManager />
     </div>
   </div>
 );
@@ -164,7 +169,7 @@ const SUBTITLES: Record<string, string> = {
   departments: 'Kat ve bölüm tanımlarını yönetin',
   schedule: 'Aylık nöbet takvimini görüntüleyin',
   employees: 'Personel kaydı oluşturun ve yönetin',
-  shifts: 'Nöbet tiplerini tanımlayın',
+  shifts: 'Çalışma tiplerini tanımlayın (Nöbet, Mesai vb.)',
   scheduler: 'Akıllı algoritmalarla nöbet çizelgesi oluşturun',
   attendance: 'Nöbet giriş-çıkış kayıtlarını yönetin',
   overtime: 'Ek mesai ve maliyet analizini görüntüleyin',
@@ -179,7 +184,7 @@ const App: React.FC = () => {
     { id: 'departments', icon: Building2, label: 'Bölümler' },
     { id: 'schedule', icon: Calendar, label: 'Nöbet Takvimi' },
     { id: 'employees', icon: Users, label: 'Personel' },
-    { id: 'shifts', icon: Clock, label: 'Nöbet Tipleri' },
+    { id: 'shifts', icon: Clock, label: 'Çalışma Tipleri' },
     { id: 'scheduler', icon: Wand2, label: 'Otomatik Planla' },
     { id: 'attendance', icon: ClipboardCheck, label: 'Puantaj' },
     { id: 'overtime', icon: TrendingUp, label: 'Ek Mesai' },

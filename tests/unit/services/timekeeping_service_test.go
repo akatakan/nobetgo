@@ -6,8 +6,10 @@ import (
 
 	"github.com/akatakan/nobetgo/internal/core"
 	"github.com/akatakan/nobetgo/internal/services"
+	mocks "github.com/akatakan/nobetgo/tests/mocks/repositories"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"gorm.io/gorm"
 )
 
 // Mock Repo
@@ -20,6 +22,19 @@ func (m *MockAttendanceRepo) Create(attendance *core.Attendance) error {
 	return args.Error(0)
 }
 
+func (m *MockAttendanceRepo) Update(attendance *core.Attendance) error {
+	args := m.Called(attendance)
+	return args.Error(0)
+}
+
+func (m *MockAttendanceRepo) GetByID(id uint) (*core.Attendance, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*core.Attendance), args.Error(1)
+}
+
 func (m *MockAttendanceRepo) GetCombinedReport(month int, year int) ([]core.Attendance, error) {
 	args := m.Called(month, year)
 	return args.Get(0).([]core.Attendance), args.Error(1)
@@ -27,7 +42,18 @@ func (m *MockAttendanceRepo) GetCombinedReport(month int, year int) ([]core.Atte
 
 func TestLogAttendance_Overtime(t *testing.T) {
 	mockRepo := new(MockAttendanceRepo)
-	service := services.NewTimekeepingService(mockRepo)
+	mockScheduleRepo := new(mocks.MockScheduleRepository) // Use existing mock package
+	service := services.NewTimekeepingService(mockRepo, mockScheduleRepo)
+
+	// Mock GetByID for overtime calculation
+	schedule := &core.Schedule{
+		Model: gorm.Model{ID: 1},
+		ShiftType: core.ShiftType{
+			StartTime: "08:00",
+			EndTime:   "16:00", // 8 hours duration
+		},
+	}
+	mockScheduleRepo.On("GetByID", uint(1)).Return(schedule, nil)
 
 	// Case 1: 10 hours work (2 hours overtime)
 	startTime := time.Date(2025, 2, 1, 8, 0, 0, 0, time.UTC)
@@ -52,11 +78,23 @@ func TestLogAttendance_Overtime(t *testing.T) {
 	assert.Equal(t, 2.0, attendance.OvertimeHours)
 
 	mockRepo.AssertExpectations(t)
+	mockScheduleRepo.AssertExpectations(t)
 }
 
 func TestLogAttendance_Normal(t *testing.T) {
 	mockRepo := new(MockAttendanceRepo)
-	service := services.NewTimekeepingService(mockRepo)
+	mockScheduleRepo := new(mocks.MockScheduleRepository)
+	service := services.NewTimekeepingService(mockRepo, mockScheduleRepo)
+
+	// Mock GetByID
+	schedule := &core.Schedule{
+		Model: gorm.Model{ID: 1},
+		ShiftType: core.ShiftType{
+			StartTime: "08:00",
+			EndTime:   "16:00", // 8 hours
+		},
+	}
+	mockScheduleRepo.On("GetByID", uint(1)).Return(schedule, nil)
 
 	// Case 2: 8 hours work (No overtime)
 	startTime := time.Date(2025, 2, 1, 8, 0, 0, 0, time.UTC)

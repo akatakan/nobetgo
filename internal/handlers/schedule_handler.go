@@ -85,3 +85,63 @@ func (h *ScheduleHandler) UpdateSchedule(c *gin.Context) {
 
 	c.JSON(http.StatusOK, updatedSchedule)
 }
+
+func (h *ScheduleHandler) ClearSchedule(c *gin.Context) {
+	monthStr := c.Query("month")
+	yearStr := c.Query("year")
+
+	if monthStr == "" || yearStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "month and year query parameters are required"})
+		return
+	}
+
+	month, err := strconv.Atoi(monthStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid month"})
+		return
+	}
+
+	year, err := strconv.Atoi(yearStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid year"})
+		return
+	}
+
+	if err := h.service.ClearMonthlySchedule(month, year); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Schedule cleared successfully"})
+}
+
+func (h *ScheduleHandler) CreateSingleSchedule(c *gin.Context) {
+	var req core.Schedule
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.service.CreateSingleSchedule(&req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, req)
+}
+
+func (h *ScheduleHandler) DeleteSchedule(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz ID"})
+		return
+	}
+
+	if err := h.service.DeleteSchedule(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Schedule deleted successfully"})
+}

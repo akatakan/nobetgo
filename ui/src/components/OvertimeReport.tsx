@@ -66,6 +66,16 @@ const OvertimeReport: React.FC = () => {
         if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
     };
 
+    // Helper: get planned hours from shift type
+    const getShiftDurationHours = (st?: { StartTime?: string; EndTime?: string }) => {
+        if (!st?.StartTime || !st?.EndTime) return 8;
+        const [sh, sm] = st.StartTime.split(':').map(Number);
+        const [eh, em] = st.EndTime.split(':').map(Number);
+        let diff = (eh * 60 + em) - (sh * 60 + sm);
+        if (diff <= 0) diff += 24 * 60; // overnight shift
+        return diff / 60;
+    };
+
     // Build per-employee stats
     const attendanceMap = new Map<number, Attendance>();
     attendances.forEach(a => attendanceMap.set(a.ScheduleID, a));
@@ -90,20 +100,21 @@ const OvertimeReport: React.FC = () => {
         if (!stat) return;
         stat.totalShifts++;
 
+        const plannedHours = getShiftDurationHours(sched.ShiftType);
         const att = attendanceMap.get(sched.ID);
         if (att) {
             const hours = (new Date(att.ActualEndTime).getTime() - new Date(att.ActualStartTime).getTime()) / 3600000;
-            const normalHours = Math.min(hours, 8);
-            const overtime = Math.max(0, hours - 8);
+            const normalHours = Math.min(hours, plannedHours);
+            const overtime = Math.max(0, hours - plannedHours);
 
             stat.totalHours += hours;
             stat.overtimeHours += overtime;
             stat.normalCost += normalHours * stat.employee.HourlyRate;
             stat.overtimeCost += overtime * stat.employee.HourlyRate * overtimeMultiplier;
         } else {
-            // No attendance logged — assume standard 8h
-            stat.totalHours += 8;
-            stat.normalCost += 8 * stat.employee.HourlyRate;
+            // No attendance logged — assume planned shift hours
+            stat.totalHours += plannedHours;
+            stat.normalCost += plannedHours * stat.employee.HourlyRate;
         }
         stat.totalCost = stat.normalCost + stat.overtimeCost;
     });
@@ -202,7 +213,7 @@ const OvertimeReport: React.FC = () => {
                                 </div>
                                 <div>
                                     <div className="font-medium text-sm">{stat.employee.FirstName} {stat.employee.LastName}</div>
-                                    <div className="text-xs text-gray-500">{stat.employee.Title} · ₺{stat.employee.HourlyRate}/s</div>
+                                    <div className="text-xs text-gray-500">{stat.employee.Title?.Name} · ₺{stat.employee.HourlyRate}/s</div>
                                 </div>
                             </div>
                             <div className="text-center text-sm font-medium">{stat.totalShifts}</div>
@@ -246,8 +257,8 @@ const OvertimeReport: React.FC = () => {
                 <TrendingUp className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <div>
                     Ek mesai çarpanı: <span className="text-amber-400 font-medium">x{overtimeMultiplier}</span>.
-                    8 saati aşan nöbetler ek mesai olarak hesaplanır.
-                    Puantaj kaydı yapılmamış nöbetler 8 saat standart olarak kabul edilir.
+                    Nöbet tipinin planlanan süresini aşan çalışmalar ek mesai olarak hesaplanır.
+                    Puantaj kaydı yapılmamış nöbetler, nöbet tipinin planlanan süresi üzerinden hesaplanır.
                 </div>
             </div>
         </div>

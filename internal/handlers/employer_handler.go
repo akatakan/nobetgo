@@ -96,3 +96,19 @@ func (h *EmployeeHandler) DeleteEmployee(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
+
+func (h *EmployeeHandler) ImportEmployees(c *gin.Context) {
+	file, _, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
+		return
+	}
+	defer file.Close()
+
+	if err := h.service.ImportEmployees(file); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Import failed: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Import successful"})
+}

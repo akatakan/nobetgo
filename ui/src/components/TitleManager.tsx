@@ -1,28 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Building2, Pencil, Trash2, Loader2, AlertTriangle } from 'lucide-react';
-import { departmentApi } from '../services/api';
-import type { Department, DepartmentFormData } from '../types';
+import { Plus, Award, Pencil, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { titleApi } from '../services/api';
+import type { Title, TitleFormData } from '../types';
 
-const emptyForm: DepartmentFormData = {
+const emptyForm: TitleFormData = {
     Name: '',
-    Floor: 1,
-    Description: '',
 };
 
-const DepartmentManager: React.FC = () => {
-    const [departments, setDepartments] = useState<Department[]>([]);
+const TitleManager: React.FC = () => {
+    const [titles, setTitles] = useState<Title[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
-    const [formData, setFormData] = useState<DepartmentFormData>({ ...emptyForm });
+    const [formData, setFormData] = useState<TitleFormData>({ ...emptyForm });
     const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
 
-    const fetchDepartments = async () => {
+    const fetchTitles = async () => {
         setLoading(true);
         try {
-            const res = await departmentApi.list();
-            setDepartments(res.data);
+            const res = await titleApi.list();
+            setTitles(res.data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -31,7 +29,7 @@ const DepartmentManager: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchDepartments();
+        fetchTitles();
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -39,14 +37,14 @@ const DepartmentManager: React.FC = () => {
         setSaving(true);
         try {
             if (editingId) {
-                await departmentApi.update(editingId, formData);
+                await titleApi.update(editingId, formData);
             } else {
-                await departmentApi.create(formData);
+                await titleApi.create(formData);
             }
             setShowForm(false);
             setEditingId(null);
             setFormData({ ...emptyForm });
-            fetchDepartments();
+            fetchTitles();
         } catch (err) {
             alert('Hata oluştu');
         } finally {
@@ -54,23 +52,19 @@ const DepartmentManager: React.FC = () => {
         }
     };
 
-    const handleEdit = (dept: Department) => {
-        setEditingId(dept.ID);
-        setFormData({
-            Name: dept.Name,
-            Floor: dept.Floor,
-            Description: dept.Description,
-        });
+    const handleEdit = (title: Title) => {
+        setEditingId(title.ID);
+        setFormData({ Name: title.Name });
         setShowForm(true);
     };
 
     const handleDelete = async (id: number) => {
         try {
-            await departmentApi.delete(id);
+            await titleApi.delete(id);
             setConfirmDelete(null);
-            fetchDepartments();
+            fetchTitles();
         } catch (err) {
-            alert('Silme hatası: Bu bölüme bağlı personel olabilir.');
+            alert('Silme hatası: Bu ünvana bağlı personel olabilir.');
         }
     };
 
@@ -80,27 +74,28 @@ const DepartmentManager: React.FC = () => {
         setFormData({ ...emptyForm });
     };
 
-    const FLOOR_COLORS = [
-        'from-blue-500/20 to-cyan-500/20',
-        'from-purple-500/20 to-pink-500/20',
-        'from-amber-500/20 to-orange-500/20',
-        'from-emerald-500/20 to-teal-500/20',
-        'from-rose-500/20 to-red-500/20',
+    const TITLE_COLORS = [
+        'from-violet-500/20 to-purple-500/20',
+        'from-blue-500/20 to-indigo-500/20',
+        'from-cyan-500/20 to-blue-500/20',
+        'from-emerald-500/20 to-cyan-500/20',
+        'from-amber-500/20 to-yellow-500/20',
+        'from-rose-500/20 to-pink-500/20',
     ];
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold">
-                    Bölüm Listesi
-                    <span className="text-sm font-normal text-gray-500 ml-2">({departments.length})</span>
+                    Ünvan Listesi
+                    <span className="text-sm font-normal text-gray-500 ml-2">({titles.length})</span>
                 </h2>
                 <button
                     onClick={() => { cancelForm(); setShowForm(!showForm); }}
                     className="btn-primary"
                 >
                     <Plus className="w-4 h-4" />
-                    Yeni Bölüm
+                    Yeni Ünvan
                 </button>
             </div>
 
@@ -108,35 +103,17 @@ const DepartmentManager: React.FC = () => {
             {showForm && (
                 <form onSubmit={handleSubmit} className="glass-card p-6 animate-slide-down">
                     <h3 className="text-lg font-semibold mb-4">
-                        {editingId ? 'Bölüm Düzenle' : 'Yeni Bölüm Ekle'}
+                        {editingId ? 'Ünvan Düzenle' : 'Yeni Ünvan Ekle'}
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-xs text-gray-400 font-medium">Bölüm Adı *</label>
+                            <label className="text-xs text-gray-400 font-medium">Ünvan Adı *</label>
                             <input
-                                placeholder="Dahiliye, Cerrahi vb."
+                                placeholder="Dr., Hemşire, Uzman vb."
                                 className="glass-input w-full"
                                 value={formData.Name}
                                 onChange={(e) => setFormData({ ...formData, Name: e.target.value })}
                                 required
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs text-gray-400 font-medium">Kat *</label>
-                            <input
-                                type="number"
-                                value={formData.Floor}
-                                onChange={(e) => setFormData({ ...formData, Floor: Number(e.target.value) })}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs text-gray-400 font-medium">Açıklama</label>
-                            <input
-                                placeholder="İsteğe bağlı açıklama"
-                                className="glass-input w-full"
-                                value={formData.Description}
-                                onChange={(e) => setFormData({ ...formData, Description: e.target.value })}
                             />
                         </div>
                     </div>
@@ -152,53 +129,45 @@ const DepartmentManager: React.FC = () => {
                 </form>
             )}
 
-            {/* Department Cards */}
+            {/* Title Cards */}
             {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="skeleton h-28 rounded-xl" />
+                        <div key={i} className="skeleton h-20 rounded-xl" />
                     ))}
                 </div>
-            ) : departments.length === 0 ? (
+            ) : titles.length === 0 ? (
                 <div className="text-center py-16 text-gray-500">
-                    <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>Henüz bölüm eklenmemiş.</p>
-                    <p className="text-sm mt-1">Nöbet oluşturmak için önce bölüm tanımlayın.</p>
+                    <Award className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>Henüz ünvan eklenmemiş.</p>
+                    <p className="text-sm mt-1">Personel eklerken ünvan seçimi yapabilmek için önce ünvan tanımlayın.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {departments.map((dept, idx) => (
+                    {titles.map((title, idx) => (
                         <div
-                            key={dept.ID}
-                            className="glass-card p-5 group hover:border-blue-500/30 transition-all duration-300 cursor-default animate-slide-up"
+                            key={title.ID}
+                            className="glass-card p-5 group hover:border-violet-500/30 transition-all duration-300 cursor-default animate-slide-up"
                             style={{ animationDelay: `${idx * 50}ms`, animationFillMode: 'both' }}
                         >
-                            <div className="flex items-start gap-4">
-                                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${FLOOR_COLORS[(dept.Floor - 1) % FLOOR_COLORS.length]} flex items-center justify-center flex-shrink-0`}>
-                                    <Building2 className="w-5 h-5 text-blue-400" />
+                            <div className="flex items-center gap-4">
+                                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${TITLE_COLORS[idx % TITLE_COLORS.length]} flex items-center justify-center flex-shrink-0`}>
+                                    <Award className="w-5 h-5 text-violet-400" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="font-semibold text-base truncate">
-                                        {dept.Name}
+                                        {title.Name}
                                     </div>
-                                    <div className="text-gray-400 text-sm">
-                                        {dept.Floor}. Kat
-                                    </div>
-                                    {dept.Description && (
-                                        <div className="text-gray-500 text-xs mt-1 truncate">
-                                            {dept.Description}
-                                        </div>
-                                    )}
                                 </div>
                                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                                     <button
-                                        onClick={() => handleEdit(dept)}
+                                        onClick={() => handleEdit(title)}
                                         className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-blue-400 transition-colors"
                                     >
                                         <Pencil className="w-3.5 h-3.5" />
                                     </button>
                                     <button
-                                        onClick={() => setConfirmDelete(dept.ID)}
+                                        onClick={() => setConfirmDelete(title.ID)}
                                         className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-red-400 transition-colors"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -219,7 +188,7 @@ const DepartmentManager: React.FC = () => {
                                 <AlertTriangle className="w-5 h-5 text-red-400" />
                             </div>
                             <div>
-                                <h4 className="font-semibold">Bölümü Sil</h4>
+                                <h4 className="font-semibold">Ünvanı Sil</h4>
                                 <p className="text-sm text-gray-400">Bu işlem geri alınamaz. Bağlı personel varsa silinemez.</p>
                             </div>
                         </div>
@@ -234,4 +203,4 @@ const DepartmentManager: React.FC = () => {
     );
 };
 
-export default DepartmentManager;
+export default TitleManager;

@@ -37,3 +37,8 @@ func (m *MockEmployeeRepository) Delete(id uint) error {
 	args := m.Called(id)
 	return args.Error(0)
 }
+
+func (m *MockEmployeeRepository) ListByDepartment(departmentID uint) ([]core.Employee, error) {
+	args := m.Called(departmentID)
+	return args.Get(0).([]core.Employee), args.Error(1)
+}

@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"math/rand"
-	"sync"
+	"sort"
 	"time"
 
 	"github.com/akatakan/nobetgo/internal/core"
@@ -10,161 +10,140 @@ import (
 
 type Optimizer struct {
 	Constraints []Constraint
-	WorkerCount int
 }
 
 func NewOptimizer(constraints []Constraint) *Optimizer {
 	return &Optimizer{
 		Constraints: constraints,
-		WorkerCount: 4, // Default to 4 workers
 	}
 }
 
-type ScheduleCandidate struct {
-	Schedule []core.Schedule
-	Score    float64
-}
-
-// OptimizeSchedule generates multiple random schedules and picks the best one based on constraints and cost
-func (o *Optimizer) OptimizeSchedule(employees []core.Employee, shiftTypes []core.ShiftType, month, year int, iterations int, overtimeThreshold, overtimeMultiplier float64) []core.Schedule {
-	candidates := make(chan ScheduleCandidate, iterations)
-	var wg sync.WaitGroup
-
-	// Worker pool
-	jobs := make(chan int, iterations)
-
-	for w := 0; w < o.WorkerCount; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for range jobs {
-				schedule := o.generateRandomSchedule(employees, shiftTypes, month, year)
-				score := o.calculateScore(schedule, employees, overtimeThreshold, overtimeMultiplier)
-				candidates <- ScheduleCandidate{Schedule: schedule, Score: score}
-			}
-		}()
+// OptimizeSchedule generates an optimized schedule using round-robin fair distribution
+// with hard constraint enforcement (no consecutive shifts, balanced workload).
+func (o *Optimizer) OptimizeSchedule(employees []core.Employee, shiftTypes []core.ShiftType, month, year int) []core.Schedule {
+	if len(employees) == 0 || len(shiftTypes) == 0 {
+		return []core.Schedule{}
 	}
 
-	// Send jobs
-	for i := 0; i < iterations; i++ {
-		jobs <- i
-	}
-	close(jobs)
-
-	wg.Wait()
-	close(candidates)
-
-	// Find best candidate
+	// Try multiple times with shuffled order to find a valid schedule
 	var bestSchedule []core.Schedule
-	minScore := 1e9 // Start with high score
+	bestPenalty := float64(1e18)
 
-	// If no valid schedule found, returns the one with lowest penalty
-	for c := range candidates {
-		if c.Score < minScore {
-			minScore = c.Score
-			bestSchedule = c.Schedule
+	for attempt := 0; attempt < 50; attempt++ {
+		schedule, penalty := o.generateFairSchedule(employees, shiftTypes, month, year)
+		if penalty < bestPenalty {
+			bestPenalty = penalty
+			bestSchedule = schedule
+		}
+		// Perfect schedule found (no violations)
+		if penalty == 0 {
+			break
 		}
 	}
 
 	return bestSchedule
 }
 
-func (o *Optimizer) generateRandomSchedule(employees []core.Employee, shiftTypes []core.ShiftType, month, year int) []core.Schedule {
+// generateFairSchedule creates a schedule using round-robin distribution
+// with built-in constraint checking during assignment.
+func (o *Optimizer) generateFairSchedule(employees []core.Employee, shiftTypes []core.ShiftType, month, year int) ([]core.Schedule, float64) {
 	var schedule []core.Schedule
 	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 1, 0)
 
-	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
-		for _, shift := range shiftTypes {
-			// Random assignment
-			randIndex := rand.Intn(len(employees))
-			selectedEmployee := employees[randIndex]
+	// Track shifts per employee for fairness
+	shiftCount := make(map[uint]int)
+	for _, e := range employees {
+		shiftCount[e.ID] = 0
+	}
 
+	// Track last work day per employee for consecutive check
+	lastWorkDay := make(map[uint]time.Time)
+
+	// Total slots = days × shift types
+	// Ideal per person = total slots / len(employees)
+
+	// Build all day-shift slots
+	type slot struct {
+		date      time.Time
+		shiftType core.ShiftType
+	}
+	var slots []slot
+	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		for _, st := range shiftTypes {
+			slots = append(slots, slot{date: d, shiftType: st})
+		}
+	}
+
+	// Shuffle employees for initial ordering variety
+	shuffled := make([]core.Employee, len(employees))
+	copy(shuffled, employees)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	totalPenalty := 0.0
+
+	for _, sl := range slots {
+		// Sort employees by shift count (fewest first) for fairness
+		sort.Slice(shuffled, func(i, j int) bool {
+			return shiftCount[shuffled[i].ID] < shiftCount[shuffled[j].ID]
+		})
+
+		assigned := false
+		for _, emp := range shuffled {
+			// Check consecutive constraint: employee must not have worked the previous day
+			if last, ok := lastWorkDay[emp.ID]; ok {
+				diff := sl.date.Sub(last).Hours()
+				if diff > 0 && diff <= 24 {
+					// Would create consecutive shift — skip this employee
+					continue
+				}
+			}
+
+			// Valid assignment
 			s := core.Schedule{
-				Date:        d,
-				EmployeeID:  selectedEmployee.ID,
-				ShiftTypeID: shift.ID,
+				Date:        sl.date,
+				EmployeeID:  emp.ID,
+				ShiftTypeID: sl.shiftType.ID,
 			}
 			schedule = append(schedule, s)
-		}
-	}
-	return schedule
-}
-
-func (o *Optimizer) calculateScore(schedule []core.Schedule, employees []core.Employee, overtimeThreshold, overtimeMultiplier float64) float64 {
-	score := 0.0
-
-	// Create a map for quick employee lookup
-	empMap := make(map[uint]core.Employee)
-	for _, e := range employees {
-		empMap[e.ID] = e
-	}
-
-	// Track hours per employee
-	empHours := make(map[uint]float64)
-
-	for _, s := range schedule {
-		emp := empMap[s.EmployeeID]
-		shiftHours := 8.0 // TODO: Get actual hours from ShiftType
-
-		// Check current total
-		currentTotal := empHours[emp.ID]
-
-		// Calculate cost for this shift
-		// If already over threshold, full shift is overtime
-		// If crossing threshold, split calculation
-
-		// Simplified weekly logic (treating month as single block for MVP or assuming weekly reset?
-		// Real overtime is usually weekly.
-		// For this implementation, let's just create a global "Overtime after X hours in month" or simplified average.
-		// PROPER WAY: Group by week.
-		// MVP WAY (User Request): "Weekly limit".
-
-		// Let's approximate week by Day / 7.
-		// weekNum := s.Date.Day() / 7
-		// uniqueKey := fmt.Sprintf("%d-%d", emp.ID, weekNum)
-		// But s.Date isn't sorted in loop? generateRandomSchedule sorts by date.
-
-		// Let's Assume the loop in generateRandomSchedule produces sorted dates.
-		// It does: `for d := start; d.Before(end); ...`
-
-		cost := 0.0
-
-		// Check invalid overtime (Hard limit? Or just cost?)
-		// standard cost
-		cost = emp.HourlyRate * shiftHours
-
-		// If this employee has piled up hours, apply multiplier?
-		// Let's simplified: If total hours > (Threshold * 4 weeks), apply multiplier?
-		// No, user said "Weekly".
-
-		// Let's compute Score based on pure cost.
-		// If we want to OPTIMIZE for cost, we essentially want to avoid overtime if multiplier > 1.
-
-		// Let's blindly apply a generic penalty/cost if they work too much.
-		currentTotal += shiftHours
-		empHours[emp.ID] = currentTotal
-
-		// Basic Overtime Logic:
-		// If total monthly hours > (45 * 4), then apply multiplier on the excess.
-		monthlyThreshold := overtimeThreshold * 4.0
-		if currentTotal > monthlyThreshold {
-			// This shift is fully or partially overtime
-			// Simplified: Just multiply whole shift cost if in overtime zone
-			cost *= overtimeMultiplier
+			shiftCount[emp.ID]++
+			lastWorkDay[emp.ID] = sl.date
+			assigned = true
+			break
 		}
 
-		score += cost
-
-		// 2. Constraints Penalty
-		for _, c := range o.Constraints {
-			penalty, isHard := c.CalculatePenalty(schedule, emp, s.Date, core.ShiftType{})
-			if isHard {
-				score += 100000
+		// If no one could be assigned without violation, pick the one with fewest shifts anyway
+		if !assigned {
+			// Fallback: least-loaded employee (accept the consecutive violation with penalty)
+			emp := shuffled[0]
+			s := core.Schedule{
+				Date:        sl.date,
+				EmployeeID:  emp.ID,
+				ShiftTypeID: sl.shiftType.ID,
 			}
-			score += penalty
+			schedule = append(schedule, s)
+			shiftCount[emp.ID]++
+			lastWorkDay[emp.ID] = sl.date
+			totalPenalty += 1000 // Penalty for constraint violation
 		}
 	}
 
-	return score
+	// Calculate fairness penalty: difference between max and min shift counts
+	maxShifts, minShifts := 0, len(slots)
+	for _, count := range shiftCount {
+		if count > maxShifts {
+			maxShifts = count
+		}
+		if count < minShifts {
+			minShifts = count
+		}
+	}
+	fairnessDiff := maxShifts - minShifts
+	if fairnessDiff > 1 {
+		totalPenalty += float64(fairnessDiff-1) * 500 // Penalty if diff > 1
+	}
+
+	return schedule, totalPenalty
 }

@@ -10,7 +10,7 @@ import (
 type Attendance struct {
 	gorm.Model
 	ScheduleID      uint      `gorm:"not null"` // Links to the planned schedule
-	Schedule        Schedule  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Schedule        Schedule  `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	ActualStartTime time.Time `gorm:"not null"`
 	ActualEndTime   time.Time `gorm:"not null"`
 	Notes           string

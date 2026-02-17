@@ -19,13 +19,13 @@ func (r *EmployeeRepository) Create(employee *core.Employee) error {
 
 func (r *EmployeeRepository) GetByID(id uint) (*core.Employee, error) {
 	var employee core.Employee
-	err := r.db.First(&employee, id).Error
+	err := r.db.Preload("Department").Preload("Title").First(&employee, id).Error
 	return &employee, err
 }
 
 func (r *EmployeeRepository) List() ([]core.Employee, error) {
 	var employees []core.Employee
-	err := r.db.Find(&employees).Error
+	err := r.db.Preload("Department").Preload("Title").Find(&employees).Error
 	return employees, err
 }
 
@@ -35,4 +35,10 @@ func (r *EmployeeRepository) Update(employee *core.Employee) error {
 
 func (r *EmployeeRepository) Delete(id uint) error {
 	return r.db.Delete(&core.Employee{}, id).Error
+}
+
+func (r *EmployeeRepository) ListByDepartment(departmentID uint) ([]core.Employee, error) {
+	var employees []core.Employee
+	err := r.db.Preload("Department").Preload("Title").Where("department_id = ? AND is_active = ?", departmentID, true).Find(&employees).Error
+	return employees, err
 }

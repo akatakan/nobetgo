@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardCheck, Clock, ChevronLeft, ChevronRight, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { scheduleApi, attendanceApi, departmentApi } from '../services/api';
-import type { Schedule, Attendance, Department } from '../types';
+import { scheduleApi, attendanceApi, departmentApi, employeeApi, shiftTypeApi } from '../services/api';
+import type { Schedule, Attendance, Department, Employee, ShiftType } from '../types';
 
 const MONTHS_TR = [
     'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
@@ -15,16 +15,35 @@ const AttendanceManager: React.FC = () => {
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [attendances, setAttendances] = useState<Attendance[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
     const [selectedDept, setSelectedDept] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState<number | null>(null);
     const [showLogForm, setShowLogForm] = useState<number | null>(null);
     const [logForm, setLogForm] = useState({ start: '08:00', end: '16:00', notes: '' });
 
+    // Manual Entry State
+    const [showManualForm, setShowManualForm] = useState(false);
+    const [manualForm, setManualForm] = useState({
+        employeeId: 0,
+        date: new Date().toISOString().split('T')[0],
+        shiftTypeId: 0,
+        start: '08:00',
+        end: '17:00',
+        notes: ''
+    });
+
     useEffect(() => {
-        departmentApi.list().then(res => {
-            setDepartments(res.data);
-            if (res.data.length > 0 && selectedDept === 0) setSelectedDept(res.data[0].ID);
+        Promise.all([
+            departmentApi.list(),
+            employeeApi.list(),
+            shiftTypeApi.list()
+        ]).then(([deptRes, empRes, stRes]) => {
+            setDepartments(deptRes.data);
+            setEmployees(empRes.data);
+            setShiftTypes(stRes.data);
+            if (deptRes.data.length > 0 && selectedDept === 0) setSelectedDept(deptRes.data[0].ID);
         }).catch(console.error);
     }, []);
 
@@ -64,12 +83,27 @@ const AttendanceManager: React.FC = () => {
             const dateObj = schedules.find(s => s.ID === scheduleId)?.Date;
             const dateStr = dateObj ? new Date(dateObj).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
-            await attendanceApi.log({
+            let endDateStr = dateStr;
+            if (logForm.end < logForm.start) {
+                const d = dateObj ? new Date(dateObj) : new Date();
+                d.setDate(d.getDate() + 1);
+                endDateStr = d.toISOString().split('T')[0];
+            }
+
+            const payload = {
                 schedule_id: scheduleId,
                 actual_start_time: `${dateStr}T${logForm.start}:00Z`,
-                actual_end_time: `${dateStr}T${logForm.end}:00Z`,
+                actual_end_time: `${endDateStr}T${logForm.end}:00Z`,
                 notes: logForm.notes,
-            });
+            };
+
+            const existing = attendanceMap.get(scheduleId);
+            if (existing) {
+                await attendanceApi.update(existing.ID, payload);
+            } else {
+                await attendanceApi.log(payload);
+            }
+
             setShowLogForm(null);
             setLogForm({ start: '08:00', end: '16:00', notes: '' });
             fetchData();
@@ -95,6 +129,54 @@ const AttendanceManager: React.FC = () => {
     const overtimeCount = attendances.filter(a => a.IsOvertime).length;
     const totalOvertimeHours = attendances.reduce((sum, a) => sum + (a.OvertimeHours || 0), 0);
 
+    const handleManualEntry = async () => {
+        if (!manualForm.employeeId || !manualForm.shiftTypeId || !manualForm.date) {
+            alert('Lütfen personel, tarih ve vardiya tipini seçin.');
+            return;
+        }
+        setSaving(-1); // Special loading state
+        try {
+            // 1. Create Schedule
+            const schedRes = await scheduleApi.create({
+                EmployeeID: manualForm.employeeId,
+                ShiftTypeID: manualForm.shiftTypeId,
+                Date: new Date(manualForm.date),
+            });
+
+            if (!schedRes.data || !schedRes.data.ID) throw new Error('Schedule creation failed');
+
+            // 2. Log Attendance
+            let endDateStr = manualForm.date;
+            if (manualForm.end < manualForm.start) {
+                const d = new Date(manualForm.date);
+                d.setDate(d.getDate() + 1);
+                endDateStr = d.toISOString().split('T')[0];
+            }
+
+            await attendanceApi.log({
+                schedule_id: schedRes.data.ID,
+                actual_start_time: `${manualForm.date}T${manualForm.start}:00Z`,
+                actual_end_time: `${endDateStr}T${manualForm.end}:00Z`,
+                notes: manualForm.notes || 'Manuel Ek',
+            });
+
+            setShowManualForm(false);
+            setManualForm({
+                employeeId: 0,
+                date: new Date().toISOString().split('T')[0],
+                shiftTypeId: shiftTypes[0]?.ID || 0,
+                start: '08:00',
+                end: '17:00',
+                notes: ''
+            });
+            fetchData();
+        } catch (err) {
+            alert('Kayıt hatası: ' + err);
+        } finally {
+            setSaving(null);
+        }
+    };
+
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header */}
@@ -113,6 +195,13 @@ const AttendanceManager: React.FC = () => {
                     </select>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowManualForm(true)}
+                        className="btn-primary text-xs py-2 px-3 flex items-center gap-2"
+                    >
+                        <Clock className="w-3.5 h-3.5" /> Manuel Ekle
+                    </button>
+                    <div className="h-6 w-px bg-white/10 mx-1"></div>
                     <button onClick={prevMonth} className="btn-ghost p-2">
                         <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -211,7 +300,7 @@ const AttendanceManager: React.FC = () => {
                                                             +{att.OvertimeHours?.toFixed(1)}s mesai
                                                         </span>
                                                     )}
-                                                    {!isLogged && (
+                                                    {!isLogged ? (
                                                         <button
                                                             onClick={() => {
                                                                 setShowLogForm(isFormOpen ? null : sched.ID);
@@ -221,6 +310,20 @@ const AttendanceManager: React.FC = () => {
                                                         >
                                                             <Clock className="w-3 h-3" />
                                                             Kaydet
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => {
+                                                                if (att) {
+                                                                    const start = new Date(att.ActualStartTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                                                    const end = new Date(att.ActualEndTime).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                                                                    setLogForm({ start, end, notes: att.Notes || '' });
+                                                                    setShowLogForm(isFormOpen ? null : sched.ID);
+                                                                }
+                                                            }}
+                                                            className="btn-ghost text-xs py-1.5 px-3 opacity-60 hover:opacity-100"
+                                                        >
+                                                            Düzenle
                                                         </button>
                                                     )}
                                                 </div>
@@ -275,6 +378,97 @@ const AttendanceManager: React.FC = () => {
                             </div>
                         );
                     })}
+                </div>
+            )}
+            {/* Manual Entry Modal */}
+            {showManualForm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-fade-in">
+                    <div className="glass-card p-6 w-full max-w-md bg-[#1e293b]">
+                        <h3 className="text-lg font-semibold mb-4">Manuel Puantaj Ekle</h3>
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs text-gray-400 font-medium">Personel</label>
+                                <select
+                                    className="glass-input w-full"
+                                    value={manualForm.employeeId}
+                                    onChange={(e) => setManualForm({ ...manualForm, employeeId: Number(e.target.value) })}
+                                >
+                                    <option value={0}>Personel Seçin</option>
+                                    {employees
+                                        .filter(e => selectedDept === 0 || e.DepartmentID === selectedDept)
+                                        .map((e) => (
+                                            <option key={e.ID} value={e.ID}>{e.FirstName} {e.LastName}</option>
+                                        ))}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-gray-400 font-medium">Tarih</label>
+                                <input
+                                    type="date"
+                                    className="glass-input w-full"
+                                    value={manualForm.date}
+                                    onChange={(e) => setManualForm({ ...manualForm, date: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-gray-400 font-medium">Vardiya Tipi (Referans)</label>
+                                <select
+                                    className="glass-input w-full"
+                                    value={manualForm.shiftTypeId}
+                                    onChange={(e) => setManualForm({ ...manualForm, shiftTypeId: Number(e.target.value) })}
+                                >
+                                    <option value={0}>Seçin</option>
+                                    {shiftTypes.map((st) => (
+                                        <option key={st.ID} value={st.ID}>{st.Name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-400 font-medium">Giriş</label>
+                                    <input
+                                        type="time"
+                                        className="glass-input w-full"
+                                        value={manualForm.start}
+                                        onChange={(e) => setManualForm({ ...manualForm, start: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-gray-400 font-medium">Çıkış</label>
+                                    <input
+                                        type="time"
+                                        className="glass-input w-full"
+                                        value={manualForm.end}
+                                        onChange={(e) => setManualForm({ ...manualForm, end: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs text-gray-400 font-medium">Not</label>
+                                <input
+                                    className="glass-input w-full"
+                                    value={manualForm.notes}
+                                    onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setShowManualForm(false)}
+                                className="btn-ghost"
+                            >
+                                İptal
+                            </button>
+                            <button
+                                onClick={handleManualEntry}
+                                disabled={saving !== null}
+                                className="btn-primary"
+                            >
+                                {saving === -1 ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                Kaydet
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -99,7 +99,7 @@ const ShiftTypeManager: React.FC = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold">
-                    Nöbet Tipleri
+                    Çalışma Tipleri
                     <span className="text-sm font-normal text-gray-500 ml-2">({shifts.length})</span>
                 </h2>
                 <button

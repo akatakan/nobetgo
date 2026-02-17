@@ -12,15 +12,21 @@ export interface Department extends BaseModel {
   Description: string;
 }
 
+export interface Title extends BaseModel {
+  Name: string;
+}
+
 export interface Employee extends BaseModel {
   FirstName: string;
   LastName: string;
-  Title: string;
+  TitleID: number;
+  Title: Title;
   DepartmentID: number;
   Department: Department;
   Email: string;
   Phone: string;
   HourlyRate: number;
+  IsShiftWorker?: boolean; // Optional for backward compatibility in UI
   IsActive: boolean;
 }
 
@@ -57,6 +63,8 @@ export interface ScheduleRequest {
   month: number;
   year: number;
   department_id: number;
+  shift_type_ids: number[];
+  employee_ids: number[];
   overtime_threshold: number;
   overtime_multiplier: number;
 }
@@ -64,11 +72,12 @@ export interface ScheduleRequest {
 export interface EmployeeFormData {
   FirstName: string;
   LastName: string;
-  Title: string;
+  TitleID: number;
   DepartmentID: number;
   Email: string;
   Phone: string;
   HourlyRate: number;
+  IsShiftWorker: boolean;
 }
 
 export interface ShiftTypeFormData {
@@ -83,4 +92,8 @@ export interface DepartmentFormData {
   Name: string;
   Floor: number;
   Description: string;
+}
+
+export interface TitleFormData {
+  Name: string;
 }

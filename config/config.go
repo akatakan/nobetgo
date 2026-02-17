@@ -9,6 +9,11 @@ import (
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
+	Log      LogConfig      `mapstructure:"log"`
+}
+
+type LogConfig struct {
+	Level string `mapstructure:"level"` // debug, info, warn, error
 }
 
 type ServerConfig struct {

@@ -21,6 +21,15 @@ func (r *ScheduleRepository) Update(schedule *core.Schedule) error {
 	return r.db.Save(schedule).Error
 }
 
+func (r *ScheduleRepository) GetByID(id uint) (*core.Schedule, error) {
+	var schedule core.Schedule
+	err := r.db.Preload("Employee").Preload("ShiftType").First(&schedule, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &schedule, nil
+}
+
 func (r *ScheduleRepository) GetCombinedSchedule(month int, year int) ([]core.Schedule, error) {
 	var schedules []core.Schedule
 	// Filter by month and year based on Date field
@@ -31,7 +40,7 @@ func (r *ScheduleRepository) GetCombinedSchedule(month int, year int) ([]core.Sc
 	// Safer: start date <= date < end date
 	// But month/year logic is passed as int.
 	// Let's use SQl query.
-	err := r.db.Preload("Employee").Preload("ShiftType").
+	err := r.db.Preload("Employee").Preload("Employee.Department").Preload("Employee.Title").Preload("ShiftType").
 		Where("EXTRACT(MONTH FROM date) = ? AND EXTRACT(YEAR FROM date) = ?", month, year).
 		Order("date ASC").
 		Find(&schedules).Error
@@ -39,6 +48,11 @@ func (r *ScheduleRepository) GetCombinedSchedule(month int, year int) ([]core.Sc
 }
 
 func (r *ScheduleRepository) DeleteByMonthYear(month int, year int) error {
-	return r.db.Where("EXTRACT(MONTH FROM date) = ? AND EXTRACT(YEAR FROM date) = ?", month, year).
+	// Use Unscoped to permanently delete (not soft delete) old schedules
+	return r.db.Unscoped().Where("EXTRACT(MONTH FROM date) = ? AND EXTRACT(YEAR FROM date) = ?", month, year).
 		Delete(&core.Schedule{}).Error
+}
+
+func (r *ScheduleRepository) Delete(id uint) error {
+	return r.db.Unscoped().Delete(&core.Schedule{}, id).Error
 }
