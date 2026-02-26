@@ -29,6 +29,10 @@ type OvertimeSummary struct {
 	WeekendHours    float64 `json:"weekend_hours"`
 	HolidayHours    float64 `json:"holiday_hours"`
 	NightShiftHours float64 `json:"night_shift_hours"`
+	OvertimePay     float64 `json:"overtime_pay"`
+	WeekendPay      float64 `json:"weekend_pay"`
+	HolidayPay      float64 `json:"holiday_pay"`
+	TotalPay        float64 `json:"total_pay"`
 	WorkingDays     int     `json:"working_days"`
 }
 
@@ -99,6 +103,15 @@ func (s *OvertimeService) CalculateOvertime(employeeID uint, month, year int) (*
 		}
 	}
 
+	// Pay calculation
+	if len(entries) > 0 {
+		rate := entries[0].Employee.HourlyRate
+		summary.OvertimePay = summary.OvertimeHours * rate * rule.OvertimeMultiplier
+		summary.WeekendPay = summary.WeekendHours * rate * rule.WeekendMultiplier
+		summary.HolidayPay = summary.HolidayHours * rate * rule.HolidayMultiplier
+		summary.TotalPay = summary.OvertimePay + summary.WeekendPay + summary.HolidayPay
+	}
+
 	return summary, nil
 }
 
@@ -165,6 +178,15 @@ func (s *OvertimeService) GetDepartmentOvertimeSummary(deptID uint, month, year 
 				summary.NormalHours += rule.WeeklyHourLimit
 				summary.OvertimeHours += hours - rule.WeeklyHourLimit
 			}
+		}
+
+		// Pay calculation
+		if len(empEntries) > 0 {
+			rate := empEntries[0].Employee.HourlyRate
+			summary.OvertimePay = summary.OvertimeHours * rate * rule.OvertimeMultiplier
+			summary.WeekendPay = summary.WeekendHours * rate * rule.WeekendMultiplier
+			summary.HolidayPay = summary.HolidayHours * rate * rule.HolidayMultiplier
+			summary.TotalPay = summary.OvertimePay + summary.WeekendPay + summary.HolidayPay
 		}
 
 		summaries = append(summaries, summary)
