@@ -124,42 +124,29 @@ func (h *TimeEntryHandler) GetTimeEntry(c *gin.Context) {
 	c.JSON(http.StatusOK, entry)
 }
 
-// ListTimeEntries handles GET /time-entries with query params: employee_id, department_id, start, end
+// ListTimeEntries handles GET /time-entries with optional filters and pagination
 func (h *TimeEntryHandler) ListTimeEntries(c *gin.Context) {
+	var params core.PaginationParams
+	params.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+	params.Limit, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
+	params.Search = c.Query("search")
+
 	start, end, err := parseDateRange(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if empIDStr := c.Query("employee_id"); empIDStr != "" {
-		empID, _ := strconv.ParseUint(empIDStr, 10, 32)
-		entries, err := h.service.GetEmployeeTimeEntries(uint(empID), start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, entries)
-		return
-	}
+	employeeID, _ := strconv.ParseUint(c.Query("employee_id"), 10, 32)
+	departmentID, _ := strconv.ParseUint(c.Query("department_id"), 10, 32)
 
-	if deptIDStr := c.Query("department_id"); deptIDStr != "" {
-		deptID, _ := strconv.ParseUint(deptIDStr, 10, 32)
-		entries, err := h.service.GetDepartmentTimeEntries(uint(deptID), start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, entries)
-		return
-	}
-
-	entries, err := h.service.GetTimeEntriesByDateRange(start, end)
+	result, err := h.service.GetPaginatedTimeEntries(params, uint(employeeID), uint(departmentID), start, end)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, entries)
+
+	c.JSON(http.StatusOK, result)
 }
 
 // --- Helper functions ---

@@ -5,6 +5,16 @@ import (
 	"gorm.io/gorm"
 )
 
+type ScheduleRepositoryInterface interface {
+	Create(schedule *core.Schedule) error
+	Update(schedule *core.Schedule) error
+	GetByID(id uint) (*core.Schedule, error)
+	Delete(id uint) error
+	GetCombinedSchedule(month int, year int) ([]core.Schedule, error)
+	DeleteByMonthYear(month int, year int) error
+	ListPaginated(params core.PaginationParams, month, year int) ([]core.Schedule, int64, error)
+}
+
 type ScheduleRepository struct {
 	db *gorm.DB
 }
@@ -55,4 +65,33 @@ func (r *ScheduleRepository) DeleteByMonthYear(month int, year int) error {
 
 func (r *ScheduleRepository) Delete(id uint) error {
 	return r.db.Unscoped().Delete(&core.Schedule{}, id).Error
+}
+
+func (r *ScheduleRepository) ListPaginated(params core.PaginationParams, month, year int) ([]core.Schedule, int64, error) {
+	var schedules []core.Schedule
+	var total int64
+
+	db := r.db.Model(&core.Schedule{}).Preload("Employee").Preload("ShiftType")
+
+	if month > 0 {
+		db = db.Where("EXTRACT(MONTH FROM date) = ?", month)
+	}
+	if year > 0 {
+		db = db.Where("EXTRACT(YEAR FROM date) = ?", year)
+	}
+
+	if params.Search != "" {
+		search := "%" + params.Search + "%"
+		db = db.Joins("LEFT JOIN employees ON employees.id = schedules.employee_id").
+			Where("employees.first_name LIKE ? OR employees.last_name LIKE ?", search, search)
+	}
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (params.Page - 1) * params.Limit
+	err := db.Order("date DESC").Offset(offset).Limit(params.Limit).Find(&schedules).Error
+
+	return schedules, total, err
 }

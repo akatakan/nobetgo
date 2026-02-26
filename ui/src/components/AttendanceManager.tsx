@@ -31,6 +31,9 @@ const AttendanceManager: React.FC = () => {
     const [selectedDept, setSelectedDept] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalItems, setTotalItems] = useState(0);
 
     // Manual entry form
     const [showManualForm, setShowManualForm] = useState(false);
@@ -45,10 +48,10 @@ const AttendanceManager: React.FC = () => {
     useEffect(() => {
         Promise.all([
             departmentApi.list(),
-            employeeApi.list(),
+            employeeApi.list({ page: 1, limit: 1000 }),
         ]).then(([deptRes, empRes]) => {
             setDepartments(deptRes.data);
-            setEmployees(empRes.data);
+            setEmployees(empRes.data.data);
             if (deptRes.data.length > 0 && selectedDept === 0) setSelectedDept(deptRes.data[0].ID);
         }).catch(console.error);
     }, []);
@@ -64,8 +67,10 @@ const AttendanceManager: React.FC = () => {
             const params: Record<string, string | number> = { start: startDate, end: endDate };
             if (selectedDept) params.department_id = selectedDept;
 
-            const res = await timeEntryApi.list(params);
-            setEntries(res.data || []);
+            const res = await timeEntryApi.list({ ...params, page: currentPage, limit: 10 });
+            setEntries(res.data.data || []);
+            setTotalPages(res.data.total_pages);
+            setTotalItems(res.data.total);
         } catch (err) {
             console.error(err);
         } finally {
@@ -75,13 +80,15 @@ const AttendanceManager: React.FC = () => {
 
     useEffect(() => {
         if (selectedDept) fetchEntries();
-    }, [month, year, selectedDept]);
+    }, [month, year, selectedDept, currentPage]);
 
     const prevMonth = () => {
         if (month === 1) { setMonth(12); setYear(year - 1); } else setMonth(month - 1);
+        setCurrentPage(1);
     };
     const nextMonth = () => {
         if (month === 12) { setMonth(1); setYear(year + 1); } else setMonth(month + 1);
+        setCurrentPage(1);
     };
 
     // Clock In
@@ -110,10 +117,9 @@ const AttendanceManager: React.FC = () => {
         }
     };
 
-    // Manual Entry
     const handleManualEntry = async () => {
         if (!manualForm.employeeId || !manualForm.clockIn) {
-            alert('Personel ve giriş saati gerekli.');
+            alert('Personel ve giriş zamanı gereklidir.');
             return;
         }
         setActionLoading('manual');
@@ -129,59 +135,57 @@ const AttendanceManager: React.FC = () => {
             setManualForm({ employeeId: 0, clockIn: '', clockOut: '', breakMinutes: 0, notes: '' });
             fetchEntries();
         } catch (err: any) {
-            alert(err?.response?.data?.error || 'Kayıt hatası');
+            alert(err?.response?.data?.error || 'Hata oluştu');
         } finally {
             setActionLoading(null);
         }
     };
 
-    // Delete
     const handleDelete = async (id: number) => {
         if (!confirm('Bu kaydı silmek istediğinize emin misiniz?')) return;
         try {
             await timeEntryApi.delete(id);
             fetchEntries();
         } catch (err) {
-            console.error(err);
+            alert('Silme hatası');
         }
     };
 
-    // Group entries by date
-    const entriesByDate: Record<string, TimeEntry[]> = {};
-    [...entries]
-        .sort((a, b) => new Date(a.clock_in).getTime() - new Date(b.clock_in).getTime())
-        .forEach(e => {
-            const key = new Date(e.clock_in).toISOString().split('T')[0];
-            if (!entriesByDate[key]) entriesByDate[key] = [];
-            entriesByDate[key].push(e);
-        });
+    const formatTime = (dateStr: string) => {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    };
 
-    // Stats
+    const formatHours = (entry: TimeEntry) => {
+        if (!entry.clock_in || !entry.clock_out) return '-';
+        const start = new Date(entry.clock_in).getTime();
+        const end = new Date(entry.clock_out).getTime();
+        const diffHours = (end - start) / (1000 * 60 * 60) - (entry.break_minutes / 60);
+        return diffHours.toFixed(1) + ' sa';
+    };
+
+    // Group entries by date
+    const entriesByDate = entries.reduce((acc: Record<string, TimeEntry[]>, entry) => {
+        const date = entry.clock_in.split('T')[0];
+        if (!acc[date]) acc[date] = [];
+        acc[date].push(entry);
+        return acc;
+    }, {});
+
+    // Summary stats
     const totalEntries = entries.length;
     const approvedCount = entries.filter(e => e.status === 'approved').length;
     const pendingCount = entries.filter(e => e.status === 'pending').length;
     const activeClockIns = entries.filter(e => !e.clock_out).length;
 
-    // Find employees with active clock-in (no clock-out)
     const deptEmployees = employees.filter(e => !selectedDept || e.DepartmentID === selectedDept);
-    const activeEmployeeIds = new Set(entries.filter(e => !e.clock_out).map(e => e.employee_id));
-
-    const formatTime = (dateStr: string) =>
-        new Date(dateStr).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-
-    const formatHours = (entry: TimeEntry) => {
-        if (!entry.clock_out) return '—';
-        const ms = new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime();
-        const hours = ms / 3600000 - (entry.break_minutes || 0) / 60;
-        return `${Math.max(0, hours).toFixed(1)}s`;
-    };
 
     return (
         <div className="space-y-6 animate-fade-in">
             {/* Header */}
-            <div className="flex justify-between items-center flex-wrap gap-3">
+            <div className="flex justify-between items-center flex-wrap gap-4">
                 <div className="flex items-center gap-4">
-                    <h2 className="text-xl font-semibold">Puantaj Takibi</h2>
+                    <h2 className="text-xl font-semibold">Puantaj & Devam Kontrol</h2>
                     <select
                         className="glass-input py-1.5 px-3 text-sm"
                         value={selectedDept}
@@ -196,9 +200,9 @@ const AttendanceManager: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowManualForm(true)}
-                        className="btn-primary text-xs py-2 px-3 flex items-center gap-2"
+                        className="btn-ghost text-xs py-2 px-3 flex items-center gap-2"
                     >
-                        <Plus className="w-3.5 h-3.5" /> Manuel Kayıt
+                        <Plus className="w-4 h-4" /> Manuel Kayıt
                     </button>
                     <div className="h-6 w-px bg-white/10 mx-1"></div>
                     <button onClick={prevMonth} className="btn-ghost p-2">
@@ -213,39 +217,40 @@ const AttendanceManager: React.FC = () => {
                 </div>
             </div>
 
-            {/* Quick Clock In/Out */}
-            <div className="glass-card p-5 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 border-blue-500/10">
-                <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-400" /> Hızlı Giriş / Çıkış
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                    {deptEmployees.map(emp => {
-                        const isActive = activeEmployeeIds.has(emp.ID);
-                        const isLoading = actionLoading === `clockin-${emp.ID}` || actionLoading === `clockout-${emp.ID}`;
-                        return (
-                            <button
-                                key={emp.ID}
-                                onClick={() => isActive ? handleClockOut(emp.ID) : handleClockIn(emp.ID)}
-                                disabled={isLoading}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 border ${isActive
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400'
-                                    : 'bg-white/[0.03] border-white/10 text-gray-400 hover:bg-blue-500/10 hover:border-blue-500/20 hover:text-blue-400'
-                                    }`}
-                            >
-                                {isLoading ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : isActive ? (
-                                    <LogOut className="w-3.5 h-3.5" />
-                                ) : (
-                                    <LogIn className="w-3.5 h-3.5" />
-                                )}
-                                {emp.FirstName} {emp.LastName}
-                                {isActive && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
-                            </button>
-                        );
-                    })}
-                    {deptEmployees.length === 0 && (
-                        <p className="text-xs text-gray-600">Bu bölümde personel yok.</p>
+            {/* Quick Actions (Clock In/Out for displayed department) */}
+            <div className="glass-card p-5 bg-gradient-to-br from-blue-600/5 to-purple-600/5 border-blue-500/10">
+                <h3 className="text-sm font-semibold text-gray-300 mb-4">Hızlı Giriş/Çıkış</h3>
+                <div className="flex flex-wrap gap-4">
+                    {deptEmployees.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic">Bu bölümde kayıtlı personel bulunamadı.</p>
+                    ) : (
+                        deptEmployees.map(emp => {
+                            const isClockedIn = entries.some(e => e.employee_id === emp.ID && !e.clock_out);
+                            return (
+                                <div key={emp.ID} className="flex flex-col gap-2 p-3 bg-white/[0.03] rounded-xl border border-white/5 min-w-[140px]">
+                                    <span className="text-xs font-medium truncate">{emp.FirstName} {emp.LastName}</span>
+                                    {isClockedIn ? (
+                                        <button
+                                            onClick={() => handleClockOut(emp.ID)}
+                                            disabled={actionLoading === `clockout-${emp.ID}`}
+                                            className="btn-ghost py-1 px-3 text-[10px] bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                                        >
+                                            <LogOut className="w-3 h-3 inline mr-1" />
+                                            {actionLoading === `clockout-${emp.ID}` ? '...' : 'Çıkış Yap'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleClockIn(emp.ID)}
+                                            disabled={actionLoading === `clockin-${emp.ID}`}
+                                            className="btn-ghost py-1 px-3 text-[10px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20"
+                                        >
+                                            <LogIn className="w-3 h-3 inline mr-1" />
+                                            {actionLoading === `clockin-${emp.ID}` ? '...' : 'Giriş Yap'}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })
                     )}
                 </div>
             </div>
@@ -254,7 +259,7 @@ const AttendanceManager: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="glass-card p-4 bg-gradient-to-br from-blue-500/5 to-blue-500/10 border-blue-500/10">
                     <div className="text-xs text-gray-400 mb-1">Toplam Kayıt</div>
-                    <div className="text-2xl font-bold text-blue-400">{totalEntries}</div>
+                    <div className="text-2xl font-bold text-blue-400">{totalItems}</div>
                 </div>
                 <div className="glass-card p-4 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 border-emerald-500/10">
                     <div className="text-xs text-gray-400 mb-1">Onaylanan</div>
@@ -366,6 +371,30 @@ const AttendanceManager: React.FC = () => {
                             </div>
                         );
                     })}
+
+                    {/* Pagination */}
+                    <div className="glass-card mt-4 px-5 py-4 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
+                        <div className="text-xs text-gray-500">
+                            Toplam <span className="text-gray-300 font-medium">{totalItems}</span> kayıt
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="btn-ghost p-1 disabled:opacity-30"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs text-gray-400">Sayfa {currentPage} / {totalPages || 1}</span>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage >= totalPages}
+                                className="btn-ghost p-1 disabled:opacity-30"
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

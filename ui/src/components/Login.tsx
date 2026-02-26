@@ -92,6 +92,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     >
                         {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
                     </button>
+
+                    <div className="text-center">
+                        <button
+                            type="button"
+                            onClick={() => alert('Şifre sıfırlama altyapısı hazırlandı. Yakında aktif edilecektir.')}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                            Şifremi Unuttum
+                        </button>
+                    </div>
                 </form>
 
                 <div className="mt-8 pt-8 border-t border-slate-100 text-center">

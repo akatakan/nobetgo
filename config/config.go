@@ -10,6 +10,7 @@ type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Log      LogConfig      `mapstructure:"log"`
+	SMTP     SMTPConfig     `mapstructure:"smtp"`
 }
 
 type LogConfig struct {
@@ -31,6 +32,14 @@ type DatabaseConfig struct {
 	Password string `mapstructure:"password"`
 	DBName   string `mapstructure:"dbname"`
 	SSLMode  string `mapstructure:"sslmode"`
+}
+
+type SMTPConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	From     string `mapstructure:"from"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

@@ -45,3 +45,11 @@ func (m *MockScheduleRepository) GetByID(id uint) (*core.Schedule, error) {
 	}
 	return args.Get(0).(*core.Schedule), args.Error(1)
 }
+
+func (m *MockScheduleRepository) ListPaginated(params core.PaginationParams, month, year int) ([]core.Schedule, int64, error) {
+	args := m.Called(params, month, year)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]core.Schedule), int64(args.Int(1)), args.Error(2)
+}

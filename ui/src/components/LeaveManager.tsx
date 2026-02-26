@@ -25,6 +25,9 @@ const LeaveManager: React.FC = () => {
     const [selectedDept, setSelectedDept] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalItems, setTotalItems] = useState(0);
 
     // Request form
     const [showRequestForm, setShowRequestForm] = useState(false);
@@ -47,11 +50,11 @@ const LeaveManager: React.FC = () => {
     useEffect(() => {
         Promise.all([
             leaveTypeApi.list(),
-            employeeApi.list(),
+            employeeApi.list({ page: 1, limit: 1000 }), // Fetch all for dropdown
             departmentApi.list(),
         ]).then(([ltRes, empRes, deptRes]) => {
             setLeaveTypes(ltRes.data || []);
-            setEmployees(empRes.data || []);
+            setEmployees(empRes.data.data || []);
             setDepartments(deptRes.data || []);
             if (deptRes.data.length > 0 && selectedDept === 0) setSelectedDept(deptRes.data[0].ID);
         }).catch(console.error);
@@ -68,8 +71,10 @@ const LeaveManager: React.FC = () => {
             const params: Record<string, string | number> = { start: startDate, end: endDate };
             if (selectedDept) params.department_id = selectedDept;
 
-            const res = await leaveApi.list(params);
-            setLeaves(res.data || []);
+            const res = await leaveApi.list({ ...params, page: currentPage, limit: 10 });
+            setLeaves(res.data.data || []);
+            setTotalPages(res.data.total_pages);
+            setTotalItems(res.data.total);
         } catch (err) {
             console.error(err);
         } finally {
@@ -299,6 +304,29 @@ const LeaveManager: React.FC = () => {
                             </div>
                         );
                     })}
+                    {/* Pagination */}
+                    <div className="px-5 py-3 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
+                        <div className="text-xs text-gray-500">
+                            Toplam <span className="text-gray-300 font-medium">{totalItems}</span> kayıt
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                className="btn-ghost p-1 disabled:opacity-30"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs text-gray-400">Sayfa {currentPage} / {totalPages || 1}</span>
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage >= totalPages}
+                                className="btn-ghost p-1 disabled:opacity-30"
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

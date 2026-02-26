@@ -58,57 +58,30 @@ func (h *LeaveHandler) GetLeave(c *gin.Context) {
 
 // ListLeaves handles GET /leaves with query params
 func (h *LeaveHandler) ListLeaves(c *gin.Context) {
+	var params core.PaginationParams
+	params.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+	params.Limit, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
+	params.Search = c.Query("search")
+
 	startStr := c.DefaultQuery("start", "")
 	endStr := c.DefaultQuery("end", "")
 
 	var start, end time.Time
 	if startStr != "" && endStr != "" {
-		var err error
-		start, err = time.Parse("2006-01-02", startStr)
-		if err != nil {
-			util.BadRequest(c, "Geçersiz start tarihi", err)
-			return
-		}
-		end, err = time.Parse("2006-01-02", endStr)
-		if err != nil {
-			util.BadRequest(c, "Geçersiz end tarihi", err)
-			return
-		}
-	} else {
-		now := time.Now()
-		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
-		end = start.AddDate(0, 1, 0)
+		start, _ = time.Parse("2006-01-02", startStr)
+		end, _ = time.Parse("2006-01-02", endStr)
 	}
 
-	if empIDStr := c.Query("employee_id"); empIDStr != "" {
-		empID, _ := strconv.ParseUint(empIDStr, 10, 32)
-		leaves, err := h.service.GetEmployeeLeaves(uint(empID), start, end)
-		if err != nil {
-			util.InternalError(c, "Çalışan izinleri getirilemedi", err)
-			return
-		}
-		c.JSON(http.StatusOK, leaves)
-		return
-	}
+	employeeID, _ := strconv.ParseUint(c.Query("employee_id"), 10, 32)
+	departmentID, _ := strconv.ParseUint(c.Query("department_id"), 10, 32)
 
-	if deptIDStr := c.Query("department_id"); deptIDStr != "" {
-		deptID, _ := strconv.ParseUint(deptIDStr, 10, 32)
-		leaves, err := h.service.GetDepartmentLeaves(uint(deptID), start, end)
-		if err != nil {
-			util.InternalError(c, "Bölüm izinleri getirilemedi", err)
-			return
-		}
-		c.JSON(http.StatusOK, leaves)
-		return
-	}
-
-	// Default: pending leaves
-	leaves, err := h.service.GetPendingLeaves()
+	result, err := h.service.GetPaginatedLeaves(params, uint(employeeID), uint(departmentID), start, end)
 	if err != nil {
-		util.InternalError(c, "Bekleyen izinler getirilemedi", err)
+		util.InternalError(c, "İzinler getirilemedi", err)
 		return
 	}
-	c.JSON(http.StatusOK, leaves)
+
+	c.JSON(http.StatusOK, result)
 }
 
 // ApproveLeave handles POST /leaves/:id/approve

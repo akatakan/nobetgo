@@ -51,3 +51,11 @@ func (m *MockEmployeeRepository) GetDB() *gorm.DB {
 	}
 	return args.Get(0).(*gorm.DB)
 }
+
+func (m *MockEmployeeRepository) ListPaginated(params core.PaginationParams) ([]core.Employee, int64, error) {
+	args := m.Called(params)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]core.Employee), int64(args.Int(1)), args.Error(2)
+}

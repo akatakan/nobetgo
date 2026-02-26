@@ -36,8 +36,7 @@ api.interceptors.response.use(
     (error) => {
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
-            // We can't easily redirect from here without a router or window hack
-            // window.location.href = '/login'; 
+            window.location.href = '/login';
         }
         return Promise.reject(error);
     }
@@ -101,8 +100,8 @@ export const timeEntryApi = {
     clockIn: (data: ClockInRequest) => api.post<TimeEntry>('/time-entries/clock-in', data),
     clockOut: (data: ClockOutRequest) => api.post<TimeEntry>('/time-entries/clock-out', data),
     create: (data: TimeEntryRequest) => api.post<TimeEntry>('/time-entries', data),
-    list: (params: { employee_id?: number; department_id?: number; start?: string; end?: string }) =>
-        api.get<TimeEntry[]>('/time-entries', { params }),
+    list: (params: PaginationParams & { employee_id?: number; department_id?: number; start?: string; end?: string }) =>
+        api.get<PaginationResult<TimeEntry>>('/time-entries', { params }),
     getById: (id: number) => api.get<TimeEntry>(`/time-entries/${id}`),
     update: (id: number, data: TimeEntryRequest) => api.put<TimeEntry>(`/time-entries/${id}`, data),
     delete: (id: number) => api.delete(`/time-entries/${id}`),
@@ -111,8 +110,8 @@ export const timeEntryApi = {
 // ===== Leave (İzin) =====
 export const leaveApi = {
     request: (data: LeaveRequest) => api.post<Leave>('/leaves', data),
-    list: (params: { employee_id?: number; department_id?: number; start?: string; end?: string }) =>
-        api.get<Leave[]>('/leaves', { params }),
+    list: (params: PaginationParams & { employee_id?: number; department_id?: number; start?: string; end?: string }) =>
+        api.get<PaginationResult<Leave>>('/leaves', { params }),
     getById: (id: number) => api.get<Leave>(`/leaves/${id}`),
     approve: (id: number, approver_id: number) =>
         api.post<Leave>(`/leaves/${id}/approve`, { approver_id }),

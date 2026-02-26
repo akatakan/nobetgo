@@ -18,6 +18,7 @@ type TimeEntryRepositoryInterface interface {
 	ListByDepartment(departmentID uint, start, end time.Time) ([]core.TimeEntry, error)
 	ListByDateRange(start, end time.Time) ([]core.TimeEntry, error)
 	ListByStatus(status string, start, end time.Time) ([]core.TimeEntry, error)
+	ListPaginated(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) ([]core.TimeEntry, int64, error)
 }
 
 // TimeEntryRepository handles database operations for TimeEntry.
@@ -97,4 +98,40 @@ func (r *TimeEntryRepository) ListByStatus(status string, start, end time.Time) 
 		Where("status = ? AND clock_in >= ? AND clock_in < ?", status, start, end).
 		Order("clock_in ASC").Find(&entries).Error
 	return entries, err
+}
+func (r *TimeEntryRepository) ListPaginated(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) ([]core.TimeEntry, int64, error) {
+	var entries []core.TimeEntry
+	var total int64
+
+	db := r.db.Model(&core.TimeEntry{}).Preload("Employee").Preload("Employee.Department").
+		Preload("Schedule").Preload("Schedule.ShiftType")
+
+	if employeeID > 0 {
+		db = db.Where("employee_id = ?", employeeID)
+	}
+	if departmentID > 0 {
+		db = db.Joins("JOIN employees ON employees.id = time_entries.employee_id").
+			Where("employees.department_id = ?", departmentID)
+	}
+	if !start.IsZero() {
+		db = db.Where("clock_in >= ?", start)
+	}
+	if !end.IsZero() {
+		db = db.Where("clock_in < ?", end)
+	}
+
+	if params.Search != "" {
+		search := "%" + params.Search + "%"
+		db = db.Joins("LEFT JOIN employees e ON e.id = time_entries.employee_id").
+			Where("e.first_name LIKE ? OR e.last_name LIKE ?", search, search)
+	}
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (params.Page - 1) * params.Limit
+	err := db.Order("clock_in DESC").Offset(offset).Limit(params.Limit).Find(&entries).Error
+
+	return entries, total, err
 }

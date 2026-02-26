@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/akatakan/nobetgo/internal/core"
@@ -146,6 +147,27 @@ func (s *TimekeepingService) UpdateTimeEntry(id uint, req core.TimeEntryRequest)
 	}
 
 	return entry, nil
+}
+
+// GetPaginatedTimeEntries returns a paginated list of time entries with filters.
+func (s *TimekeepingService) GetPaginatedTimeEntries(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) (*core.PaginationResult, error) {
+	data, total, err := s.repo.ListPaginated(params, employeeID, departmentID, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := 0
+	if params.Limit > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(params.Limit)))
+	}
+
+	return &core.PaginationResult{
+		Data:       data,
+		Total:      total,
+		Page:       params.Page,
+		Limit:      params.Limit,
+		TotalPages: totalPages,
+	}, nil
 }
 
 // DeleteTimeEntry removes a time entry.

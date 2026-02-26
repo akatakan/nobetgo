@@ -15,8 +15,9 @@ func TestGenerateSchedule(t *testing.T) {
 	mockScheduleRepo := new(mocks.MockScheduleRepository)
 	mockEmployeeRepo := new(mocks.MockEmployeeRepository)
 	mockShiftRepo := new(mocks.MockShiftTypeRepository)
+	mockLeaveRepo := new(mocks.MockLeaveRepository)
 
-	service := services.NewSchedulerService(mockScheduleRepo, mockEmployeeRepo, mockShiftRepo)
+	service := services.NewSchedulerService(mockScheduleRepo, mockEmployeeRepo, mockShiftRepo, mockLeaveRepo)
 
 	t.Run("Success", func(t *testing.T) {
 		req := core.ScheduleRequest{Month: 1, Year: 2025}
@@ -29,6 +30,7 @@ func TestGenerateSchedule(t *testing.T) {
 
 		mockEmployeeRepo.On("List").Return(employees, nil)
 		mockShiftRepo.On("List").Return(shiftTypes, nil)
+		mockLeaveRepo.On("ListByStatus", "approved").Return([]core.Leave{}, nil)
 
 		mockScheduleRepo.On("Create", mock.AnythingOfType("*core.Schedule")).Return(nil)
 

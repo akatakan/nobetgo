@@ -29,6 +29,7 @@ type LeaveRepositoryInterface interface {
 	GetBalance(employeeID uint, leaveTypeID uint, year int) (*core.LeaveBalance, error)
 	GetAllBalances(employeeID uint, year int) ([]core.LeaveBalance, error)
 	UpsertBalance(balance *core.LeaveBalance) error
+	ListPaginated(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) ([]core.Leave, int64, error)
 }
 
 // LeaveRepository handles database operations for Leave, LeaveType, and LeaveBalance.
@@ -162,4 +163,39 @@ func (r *LeaveRepository) UpsertBalance(balance *core.LeaveBalance) error {
 	existing.UsedDays = balance.UsedDays
 	existing.RemainingDays = balance.RemainingDays
 	return r.db.Save(&existing).Error
+}
+func (r *LeaveRepository) ListPaginated(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) ([]core.Leave, int64, error) {
+	var leaves []core.Leave
+	var total int64
+
+	db := r.db.Model(&core.Leave{}).Preload("Employee").Preload("LeaveType")
+
+	if employeeID > 0 {
+		db = db.Where("employee_id = ?", employeeID)
+	}
+	if departmentID > 0 {
+		db = db.Joins("JOIN employees ON employees.id = leaves.employee_id").
+			Where("employees.department_id = ?", departmentID)
+	}
+	if !start.IsZero() {
+		db = db.Where("start_date >= ?", start)
+	}
+	if !end.IsZero() {
+		db = db.Where("start_date < ?", end)
+	}
+
+	if params.Search != "" {
+		search := "%" + params.Search + "%"
+		db = db.Joins("LEFT JOIN employees ON employees.id = leaves.employee_id").
+			Where("employees.first_name LIKE ? OR employees.last_name LIKE ?", search, search)
+	}
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (params.Page - 1) * params.Limit
+	err := db.Order("leaves.start_date DESC").Offset(offset).Limit(params.Limit).Find(&leaves).Error
+
+	return leaves, total, err
 }

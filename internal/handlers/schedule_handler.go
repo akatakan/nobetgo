@@ -34,23 +34,27 @@ func (h *ScheduleHandler) GenerateSchedule(c *gin.Context) {
 }
 
 func (h *ScheduleHandler) GetSchedule(c *gin.Context) {
-	monthStr := c.Query("month")
-	yearStr := c.Query("year")
+	month, _ := strconv.Atoi(c.Query("month"))
+	year, _ := strconv.Atoi(c.Query("year"))
 
-	if monthStr == "" || yearStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "month and year query parameters are required"})
+	// If pagination params provided, use paginated list. Otherwise return all (legacy)
+	if c.Query("page") != "" || c.Query("limit") != "" {
+		var params core.PaginationParams
+		params.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+		params.Limit, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
+		params.Search = c.Query("search")
+
+		result, err := h.service.GetPaginatedSchedules(params, month, year)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, result)
 		return
 	}
 
-	month, err := strconv.Atoi(monthStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid month"})
-		return
-	}
-
-	year, err := strconv.Atoi(yearStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid year"})
+	if month == 0 || year == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "month and year query parameters are required for full schedule"})
 		return
 	}
 

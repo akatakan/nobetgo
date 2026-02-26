@@ -62,3 +62,11 @@ func (m *MockTimeEntryRepository) ListByStatus(status string, start, end time.Ti
 	args := m.Called(status, start, end)
 	return args.Get(0).([]core.TimeEntry), args.Error(1)
 }
+
+func (m *MockTimeEntryRepository) ListPaginated(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) ([]core.TimeEntry, int64, error) {
+	args := m.Called(params, employeeID, departmentID, start, end)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]core.TimeEntry), int64(args.Int(1)), args.Error(2)
+}

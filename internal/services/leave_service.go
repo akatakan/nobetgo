@@ -142,6 +142,24 @@ func (s *LeaveService) GetLeaveBalance(employeeID uint, year int) ([]core.LeaveB
 	return s.repo.GetAllBalances(employeeID, year)
 }
 
+// GetPaginatedLeaves returns a paginated list of leaves with filters.
+func (s *LeaveService) GetPaginatedLeaves(params core.PaginationParams, employeeID, departmentID uint, start, end time.Time) (*core.PaginationResult, error) {
+	data, total, err := s.repo.ListPaginated(params, employeeID, departmentID, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(params.Limit)))
+
+	return &core.PaginationResult{
+		Data:       data,
+		Total:      total,
+		Page:       params.Page,
+		Limit:      params.Limit,
+		TotalPages: totalPages,
+	}, nil
+}
+
 // InitializeBalance creates initial leave balances for an employee based on leave type defaults.
 func (s *LeaveService) InitializeBalance(employeeID uint, year int) error {
 	leaveTypes, err := s.repo.ListLeaveTypes()

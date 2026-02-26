@@ -2,6 +2,7 @@ package services
 
 import (
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/akatakan/nobetgo/internal/core"
@@ -16,6 +17,7 @@ type ScheduleRepositoryInterface interface {
 	DeleteByMonthYear(month int, year int) error
 	Delete(id uint) error
 	GetByID(id uint) (*core.Schedule, error)
+	ListPaginated(params core.PaginationParams, month, year int) ([]core.Schedule, int64, error)
 }
 
 type SchedulerService struct {
@@ -155,6 +157,26 @@ func (s *SchedulerService) GenerateSchedule(req core.ScheduleRequest) ([]core.Sc
 
 func (s *SchedulerService) GetMonthlySchedule(month, year int) ([]core.Schedule, error) {
 	return s.repo.GetCombinedSchedule(month, year)
+}
+
+func (s *SchedulerService) GetPaginatedSchedules(params core.PaginationParams, month, year int) (*core.PaginationResult, error) {
+	data, total, err := s.repo.ListPaginated(params, month, year)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := 0
+	if params.Limit > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(params.Limit)))
+	}
+
+	return &core.PaginationResult{
+		Data:       data,
+		Total:      total,
+		Page:       params.Page,
+		Limit:      params.Limit,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (s *SchedulerService) UpdateSchedule(id uint, req core.Schedule) (*core.Schedule, error) {

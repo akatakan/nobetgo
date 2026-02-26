@@ -52,7 +52,8 @@ func main() {
 		&core.OvertimeRule{},
 		&core.PublicHoliday{},
 		&core.AuditLog{},
-		&core.Notification{}, // <-- new notification model
+		&core.Notification{},
+		&core.PasswordResetToken{},
 	)
 	if err != nil {
 		slog.Error("Cannot migrate database", "error", err)
@@ -138,6 +139,7 @@ func main() {
 
 	// Auth
 	authHandler := handlers.NewAuthHandler(employeeRepo, cfg)
+	loginRateLimiter := middleware.NewIPRateLimiter(1.0/60.0, 5) // 5 attempts per minute
 
 	// ===== Router =====
 
@@ -169,7 +171,7 @@ func main() {
 	api := router.Group("/api/v1")
 	{
 		// Public Auth
-		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/login", middleware.RateLimit(loginRateLimiter), authHandler.Login)
 
 		// Protected Routes
 		protected := api.Group("")
