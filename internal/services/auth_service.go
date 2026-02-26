@@ -25,14 +25,14 @@ func NewAuthService(empRepo *repositories.EmployeeRepository, tokenRepo *reposit
 	}
 }
 
-func (s *AuthService) Login(email, password string) (string, string, error) {
-	employee, err := s.employeeRepo.GetByEmail(email)
+func (s *AuthService) Login(username, password string) (string, string, error) {
+	employee, err := s.employeeRepo.GetByUsername(username)
 	if err != nil {
-		return "", "", errors.New("geçersiz e-posta veya şifre")
+		return "", "", errors.New("geçersiz kullanıcı adı veya şifre")
 	}
 
 	if !util.CheckPasswordHash(password, employee.PasswordHash) {
-		return "", "", errors.New("geçersiz e-posta veya şifre")
+		return "", "", errors.New("geçersiz kullanıcı adı veya şifre")
 	}
 
 	token, err := util.GenerateToken(employee.ID, employee.Role, s.jwtSecret)
@@ -101,4 +101,23 @@ func (s *AuthService) ResetPassword(tokenStr, newPassword string) error {
 	}
 
 	return nil
+}
+
+func (s *AuthService) ChangePassword(employeeID uint, oldPassword, newPassword string) error {
+	employee, err := s.employeeRepo.GetByID(employeeID)
+	if err != nil {
+		return errors.New("kullanıcı bulunamadı")
+	}
+
+	if !util.CheckPasswordHash(oldPassword, employee.PasswordHash) {
+		return errors.New("mevcut şifre hatalı")
+	}
+
+	hashedPassword, err := util.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	employee.PasswordHash = hashedPassword
+	return s.employeeRepo.Update(employee)
 }

@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/akatakan/nobetgo/config"
 	"github.com/akatakan/nobetgo/internal/core"
@@ -65,20 +70,55 @@ func main() {
 	slog.Info("Database migration completed")
 
 	// Seed initial admin if no employees exist
-	var count int64
-	db.Model(&core.Employee{}).Count(&count)
-	if count == 0 {
-		hashedPassword, _ := util.HashPassword("admin123")
+	var employeesCount int64
+	db.Model(&core.Employee{}).Count(&employeesCount)
+	if employeesCount == 0 {
+		// 1. Ensure a default Department exists
+		var dept core.Department
+		if err := db.First(&dept).Error; err != nil {
+			dept = core.Department{Name: "Yönetim", Floor: 0}
+			db.Create(&dept)
+		}
+
+		// 2. Ensure a default Title exists
+		var title core.Title
+		if err := db.First(&title).Error; err != nil {
+			title = core.Title{Name: "Yönetici"}
+			db.Create(&title)
+		}
+
+		// 3. Create Admin
+		hashedPassword, _ := util.HashPassword("admin")
 		admin := core.Employee{
 			FirstName:    "Sistem",
 			LastName:     "Yöneticisi",
+			Username:     "admin",
 			Email:        "admin@nobetgo.com",
 			PasswordHash: hashedPassword,
 			Role:         "admin",
 			IsActive:     true,
+			DepartmentID: dept.ID,
+			TitleID:      title.ID,
 		}
 		db.Create(&admin)
-		slog.Info("Initial admin user created: admin@nobetgo.com / admin123")
+		slog.Info("Initial admin user created: admin / admin")
+
+		// 4. Ensure a default Overtime Rule exists
+		var rule core.OvertimeRule
+		if err := db.First(&rule).Error; err != nil {
+			rule = core.OvertimeRule{
+				Name:               "Standart Mesai Kuralları",
+				WeeklyHourLimit:    45,
+				DailyHourLimit:     11,
+				OvertimeMultiplier: 1.5,
+				WeekendMultiplier:  2.0,
+				HolidayMultiplier:  2.5,
+				NightShiftExtra:    0.1,
+				IsActive:           true,
+			}
+			db.Create(&rule)
+			slog.Info("Default overtime rule created")
+		}
 	}
 
 	// ===== Initialize Layers =====
@@ -143,6 +183,10 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	loginRateLimiter := middleware.NewIPRateLimiter(1.0/60.0, 5) // 5 attempts per minute
 
+	// Backup
+	backupService := services.NewBackupService(cfg.Database)
+	backupHandler := handlers.NewBackupHandler(backupService)
+
 	// ===== Router =====
 
 	router := gin.New()
@@ -178,6 +222,7 @@ func main() {
 			auth.POST("/login", middleware.RateLimit(loginRateLimiter), authHandler.Login)
 			auth.POST("/forgot-password", authHandler.ForgotPassword)
 			auth.POST("/reset-password", authHandler.ResetPassword)
+			auth.POST("/change-password", middleware.AuthMiddleware(cfg.Server.JWTSecret), authHandler.ChangePassword)
 		}
 
 		// Protected Routes
@@ -326,13 +371,54 @@ func main() {
 				notifications.POST("/:id/read", notificationHandler.MarkAsRead)
 				notifications.POST("/read-all", notificationHandler.MarkAllAsRead)
 			}
+
+			// Backups
+			backups := protected.Group("/backups")
+			{
+				backups.GET("/export", middleware.RoleMiddleware("admin"), backupHandler.ExportBackup)
+			}
 		}
 	}
 
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
-	slog.Info("Server starting", "address", addr, "mode", cfg.Server.Mode)
-	if err := router.Run(addr); err != nil {
-		slog.Error("Server failed to start", "error", err)
-		os.Exit(1)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: router,
 	}
+
+	// Initializing the server in a goroutine so that it won't block the graceful shutdown handling below
+	go func() {
+		slog.Info("Server starting", "address", addr, "mode", cfg.Server.Mode)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Server failed to start", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with a timeout
+	quit := make(chan os.Signal, 1)
+	// kill (no param) default send syscall.SIGTERM
+	// kill -2 is syscall.SIGINT
+	// kill -9 is syscall.SIGKILL but can't be caught, so no need to add it
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	slog.Info("Shutting down server...")
+
+	// The context is used to inform the server it has 5 seconds to finish
+	// the request it is currently handling
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Server forced to shutdown:", "error", err)
+	}
+
+	// Properly close database connection if possible
+	// (Assuming the database package provides a way to get the underlying sql.DB or close directly)
+	if sqlDB, err := db.DB(); err == nil {
+		slog.Info("Closing database connection...")
+		sqlDB.Close()
+	}
+
+	slog.Info("Server exiting")
 }

@@ -12,9 +12,10 @@ import ApprovalManager from './components/ApprovalManager';
 import ReportingDashboard from './components/ReportingDashboard';
 import TitleManager from './components/TitleManager';
 import Login from './components/Login';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import { NotificationBell } from './components/NotificationBell';
 import { employeeApi, shiftTypeApi, scheduleApi, departmentApi } from './services/api';
-import { LogOut } from 'lucide-react';
+import { LogOut, Lock as LockIcon } from 'lucide-react';
 import './App.css';
 
 // Dynamic Dashboard
@@ -32,7 +33,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
           departmentApi.list(),
         ]);
         setStats({
-          employees: empRes.status === 'fulfilled' ? empRes.value.data.length : 0,
+          employees: empRes.status === 'fulfilled' ? empRes.value.data.data.length : 0,
           shifts: shiftRes.status === 'fulfilled' ? shiftRes.value.data.length : 0,
           schedules: schedRes.status === 'fulfilled' ? schedRes.value.data.length : 0,
           departments: deptRes.status === 'fulfilled' ? deptRes.value.data.length : 0,
@@ -165,6 +166,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [role, setRole] = useState<string | null>(localStorage.getItem('role'));
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const handleLoginSuccess = (token: string, role: string) => {
     setToken(token);
@@ -205,6 +207,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-[var(--bg-primary)] text-white overflow-hidden">
+      <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} />
       {/* Sidebar */}
       <aside className="w-64 bg-[var(--bg-secondary)] border-r border-white/[0.06] flex flex-col">
         {/* Logo */}
@@ -242,6 +245,13 @@ const App: React.FC = () => {
 
         {/* Bottom */}
         <div className="p-4 border-t border-white/[0.04]">
+          <button
+            onClick={() => setShowChangePassword(true)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-blue-500/10 hover:text-blue-400 transition-all text-sm font-medium mb-1"
+          >
+            <LockIcon className="w-[18px] h-[18px]" />
+            Şifre Değiştir
+          </button>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-all text-sm font-medium mb-2"

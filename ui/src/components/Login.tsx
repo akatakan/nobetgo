@@ -7,7 +7,7 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -18,7 +18,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         setLoading(true);
 
         try {
-            const response = await authApi.login({ email, password });
+            const response = await authApi.login({ username, password });
             const { token, role } = response.data;
 
             localStorage.setItem('token', token);
@@ -52,18 +52,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">E-posta Adresi</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Kullanıcı Adı</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                 <Mail className="h-5 w-5 text-slate-400" />
                             </div>
                             <input
-                                type="email"
+                                type="text"
                                 required
                                 className="block w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                placeholder="admin@nobetgo.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="kullanıcı_adı"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
                             />
                         </div>
                     </div>

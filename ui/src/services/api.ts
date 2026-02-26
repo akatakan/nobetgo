@@ -44,6 +44,7 @@ api.interceptors.response.use(
 
 export const authApi = {
     login: (data: any) => api.post<AuthResponse>('/auth/login', data),
+    changePassword: (data: any) => api.post('/auth/change-password', data),
 };
 
 export const departmentApi = {

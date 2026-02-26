@@ -10,6 +10,7 @@ type Employee struct {
 	Title         Title      `json:"Title"`
 	DepartmentID  uint       `json:"DepartmentID"`
 	Department    Department `json:"Department"`
+	Username      string     `gorm:"type:varchar(50);uniqueIndex" json:"Username"`
 	Email         string     `json:"Email"`
 	Phone         string     `json:"Phone"`
 	HourlyRate    float64    `gorm:"default:0" json:"HourlyRate"`

@@ -47,6 +47,12 @@ func (r *EmployeeRepository) ListByDepartment(departmentID uint) ([]core.Employe
 	return employees, err
 }
 
+func (r *EmployeeRepository) GetByUsername(username string) (*core.Employee, error) {
+	var employee core.Employee
+	err := r.db.Where("username = ?", username).First(&employee).Error
+	return &employee, err
+}
+
 func (r *EmployeeRepository) GetByEmail(email string) (*core.Employee, error) {
 	var employee core.Employee
 	err := r.db.Where("email = ?", email).First(&employee).Error
@@ -61,7 +67,7 @@ func (r *EmployeeRepository) ListPaginated(params core.PaginationParams) ([]core
 
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
-		db = db.Where("first_name LIKE ? OR last_name LIKE ? OR email LIKE ?", search, search, search)
+		db = db.Where("first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR username LIKE ?", search, search, search, search)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/akatakan/nobetgo/internal/services"
 	"github.com/akatakan/nobetgo/util"
@@ -80,20 +81,22 @@ func (h *ApprovalHandler) RejectTimeEntry(c *gin.Context) {
 // GetAuditLogs handles GET /audit-logs?entity_type=&entity_id=
 func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 	entityType := c.Query("entity_type")
-	entityID, err := parseUintParam(c, "entity_id")
+	entityIDStr := c.Query("entity_id")
+
 	if entityType == "" {
 		util.BadRequest(c, "entity_type gerekli", nil)
 		return
 	}
 
-	// If entity_id not provided, get logs by date range
-	if err != nil {
-		start, end, err := parseDateRange(c)
+	// If entity_id is provided, get logs for specific entity
+	if entityIDStr != "" {
+		entityID, err := strconv.ParseUint(entityIDStr, 10, 32)
 		if err != nil {
-			util.BadRequest(c, "Tarih aralığı geçersiz", err)
+			util.BadRequest(c, "Geçersiz entity_id", err)
 			return
 		}
-		logs, err := h.service.GetAuditLogsByDateRange(start, end)
+
+		logs, err := h.service.GetAuditLogs(entityType, uint(entityID))
 		if err != nil {
 			util.InternalError(c, "Denetim günlükleri getirilemedi", err)
 			return
@@ -102,9 +105,16 @@ func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 		return
 	}
 
-	logs, err2 := h.service.GetAuditLogs(entityType, entityID)
-	if err2 != nil {
-		util.InternalError(c, "Denetim günlükleri getirilemedi", err2)
+	// No entity_id, get logs by date range
+	start, end, err := parseDateRange(c)
+	if err != nil {
+		util.BadRequest(c, "Tarih aralığı geçersiz", err)
+		return
+	}
+
+	logs, err := h.service.GetAuditLogsByDateRange(start, end)
+	if err != nil {
+		util.InternalError(c, "Denetim günlükleri getirilemedi", err)
 		return
 	}
 

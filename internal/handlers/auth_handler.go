@@ -19,7 +19,7 @@ func NewAuthHandler(service *services.AuthService) *AuthHandler {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
+	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
@@ -34,7 +34,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, role, err := h.service.Login(req.Email, req.Password)
+	token, role, err := h.service.Login(req.Username, req.Password)
 	if err != nil {
 		util.Unauthorized(c, err.Error())
 		return
@@ -91,6 +91,32 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Şifreniz başarıyla güncellendi."})
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"oldPassword" binding:"required"`
+	NewPassword string `json:"newPassword" binding:"required,min=6"`
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req ChangePasswordRequest
+	if err := h.utilBindJSON(c, &req); err != nil {
+		return
+	}
+
+	// userID is set by AuthMiddleware
+	userID, exists := c.Get("userID")
+	if !exists {
+		util.Unauthorized(c, "Oturum geçersiz")
+		return
+	}
+
+	if err := h.service.ChangePassword(userID.(uint), req.OldPassword, req.NewPassword); err != nil {
+		util.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Şifreniz başarıyla değiştirildi."})
 }
 
 // utilBindJSON is a helper to DRY bind/error handling
