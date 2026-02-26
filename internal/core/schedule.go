@@ -25,4 +25,6 @@ type ScheduleRequest struct {
 	EmployeeIDs        []uint  `json:"employee_ids"`
 	OvertimeThreshold  float64 `json:"overtime_threshold"`  // Default 45.0
 	OvertimeMultiplier float64 `json:"overtime_multiplier"` // Default 1.5
+	SchedulingMode     string  `json:"scheduling_mode"`     // "normal", "bed_capacity" or "fatigue_aware"
+	BedsPerPersonnel   int     `json:"beds_per_personnel"`  // Relevant if mode is bed_capacity. Example: 3 (3 beds per 1 nurse)
 }

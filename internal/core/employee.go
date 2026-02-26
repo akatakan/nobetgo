@@ -15,4 +15,7 @@ type Employee struct {
 	HourlyRate    float64    `gorm:"default:0" json:"HourlyRate"`
 	IsShiftWorker bool       `gorm:"default:true" json:"IsShiftWorker"` // If false, excluded from auto-schedule
 	IsActive      bool       `gorm:"default:true" json:"IsActive"`
+	Competencies  string     `gorm:"type:text" json:"Competencies"` // Stored as comma-separated string or JSON string to keep it DB agnostic (SQLite/Postgres)
+	FatigueScore  int        `gorm:"default:0" json:"FatigueScore"`
+	HeroPoint     int        `gorm:"default:0" json:"HeroPoint"`
 }

@@ -13,6 +13,10 @@ func NewEmployeeRepository(db *gorm.DB) *EmployeeRepository {
 	return &EmployeeRepository{db: db}
 }
 
+func (r *EmployeeRepository) GetDB() *gorm.DB {
+	return r.db
+}
+
 func (r *EmployeeRepository) Create(employee *core.Employee) error {
 	return r.db.Create(employee).Error
 }

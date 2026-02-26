@@ -111,8 +111,17 @@ func (s *SchedulerService) GenerateSchedule(req core.ScheduleRequest) ([]core.Sc
 
 	optimizer := scheduler.NewOptimizer(constraints)
 
+	// Fetch department to support bed capacity mode
+	var department *core.Department
+	if req.DepartmentID > 0 {
+		var d core.Department
+		if err := s.employeeRepo.GetDB().Model(&core.Department{}).Where("id = ?", req.DepartmentID).First(&d).Error; err == nil {
+			department = &d
+		}
+	}
+
 	// 5. Generate optimized schedule
-	bestSchedule := optimizer.OptimizeSchedule(employees, shiftTypes, req.Month, req.Year)
+	bestSchedule := optimizer.OptimizeSchedule(req, department, employees, shiftTypes)
 
 	// 6. Save to database
 	for _, sched := range bestSchedule {

@@ -1,0 +1,229 @@
+package services
+
+import (
+	"log/slog"
+	"time"
+
+	"github.com/akatakan/nobetgo/internal/core"
+	"github.com/akatakan/nobetgo/internal/repositories"
+)
+
+// OvertimeService handles overtime calculation using defined rules.
+type OvertimeService struct {
+	ruleRepo      repositories.OvertimeRuleRepositoryInterface
+	timeEntryRepo repositories.TimeEntryRepositoryInterface
+}
+
+// NewOvertimeService creates a new OvertimeService.
+func NewOvertimeService(ruleRepo repositories.OvertimeRuleRepositoryInterface, timeEntryRepo repositories.TimeEntryRepositoryInterface) *OvertimeService {
+	return &OvertimeService{ruleRepo: ruleRepo, timeEntryRepo: timeEntryRepo}
+}
+
+// OvertimeSummary holds calculated overtime data for a single employee.
+type OvertimeSummary struct {
+	EmployeeID      uint    `json:"employee_id"`
+	EmployeeName    string  `json:"employee_name"`
+	TotalHours      float64 `json:"total_hours"`
+	NormalHours     float64 `json:"normal_hours"`
+	OvertimeHours   float64 `json:"overtime_hours"`
+	WeekendHours    float64 `json:"weekend_hours"`
+	HolidayHours    float64 `json:"holiday_hours"`
+	NightShiftHours float64 `json:"night_shift_hours"`
+	WorkingDays     int     `json:"working_days"`
+}
+
+// CalculateOvertime computes the overtime summary for an employee in a given month.
+func (s *OvertimeService) CalculateOvertime(employeeID uint, month, year int) (*OvertimeSummary, error) {
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+
+	entries, err := s.timeEntryRepo.ListByEmployee(employeeID, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	rule, err := s.ruleRepo.GetActive()
+	if err != nil {
+		slog.Warn("No active overtime rule found, using defaults", "error", err)
+		rule = defaultOvertimeRule()
+	}
+
+	summary := &OvertimeSummary{
+		EmployeeID: employeeID,
+	}
+
+	// Calculate weekly buckets
+	weeklyHours := make(map[int]float64) // ISO week -> hours
+
+	for _, entry := range entries {
+		hours := entry.NetWorkingHours()
+		if hours <= 0 {
+			continue
+		}
+
+		summary.TotalHours += hours
+		summary.WorkingDays++
+
+		// Set employee name from first entry
+		if summary.EmployeeName == "" {
+			summary.EmployeeName = entry.Employee.FirstName + " " + entry.Employee.LastName
+		}
+
+		// Classify hours
+		isHoliday, _ := s.ruleRepo.IsHoliday(entry.ClockIn)
+		isWeekend := entry.ClockIn.Weekday() == time.Saturday || entry.ClockIn.Weekday() == time.Sunday
+
+		switch {
+		case isHoliday:
+			summary.HolidayHours += hours
+		case isWeekend:
+			summary.WeekendHours += hours
+		default:
+			_, week := entry.ClockIn.ISOWeek()
+			weeklyHours[week] += hours
+		}
+
+		// Night shift check (simplified: if entry type is marked or shift starts after 22:00)
+		if entry.EntryType == "night" {
+			summary.NightShiftHours += hours
+		}
+	}
+
+	// Calculate normal vs overtime from weekly totals
+	for _, hours := range weeklyHours {
+		if hours <= rule.WeeklyHourLimit {
+			summary.NormalHours += hours
+		} else {
+			summary.NormalHours += rule.WeeklyHourLimit
+			summary.OvertimeHours += hours - rule.WeeklyHourLimit
+		}
+	}
+
+	return summary, nil
+}
+
+// GetDepartmentOvertimeSummary returns overtime summaries for all employees in a department.
+func (s *OvertimeService) GetDepartmentOvertimeSummary(deptID uint, month, year int) ([]OvertimeSummary, error) {
+	start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+
+	entries, err := s.timeEntryRepo.ListByDepartment(deptID, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	rule, err := s.ruleRepo.GetActive()
+	if err != nil {
+		rule = defaultOvertimeRule()
+	}
+
+	// Group entries by employee
+	grouped := make(map[uint][]core.TimeEntry)
+	for _, e := range entries {
+		grouped[e.EmployeeID] = append(grouped[e.EmployeeID], e)
+	}
+
+	var summaries []OvertimeSummary
+	for empID, empEntries := range grouped {
+		summary := OvertimeSummary{
+			EmployeeID: empID,
+		}
+
+		weeklyHours := make(map[int]float64)
+
+		for _, entry := range empEntries {
+			hours := entry.NetWorkingHours()
+			if hours <= 0 {
+				continue
+			}
+
+			summary.TotalHours += hours
+			summary.WorkingDays++
+
+			if summary.EmployeeName == "" {
+				summary.EmployeeName = entry.Employee.FirstName + " " + entry.Employee.LastName
+			}
+
+			isHoliday, _ := s.ruleRepo.IsHoliday(entry.ClockIn)
+			isWeekend := entry.ClockIn.Weekday() == time.Saturday || entry.ClockIn.Weekday() == time.Sunday
+
+			switch {
+			case isHoliday:
+				summary.HolidayHours += hours
+			case isWeekend:
+				summary.WeekendHours += hours
+			default:
+				_, week := entry.ClockIn.ISOWeek()
+				weeklyHours[week] += hours
+			}
+		}
+
+		for _, hours := range weeklyHours {
+			if hours <= rule.WeeklyHourLimit {
+				summary.NormalHours += hours
+			} else {
+				summary.NormalHours += rule.WeeklyHourLimit
+				summary.OvertimeHours += hours - rule.WeeklyHourLimit
+			}
+		}
+
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, nil
+}
+
+// --- OvertimeRule CRUD ---
+
+func (s *OvertimeService) CreateRule(rule *core.OvertimeRule) error {
+	return s.ruleRepo.Create(rule)
+}
+
+func (s *OvertimeService) UpdateRule(rule *core.OvertimeRule) error {
+	return s.ruleRepo.Update(rule)
+}
+
+func (s *OvertimeService) GetRule(id uint) (*core.OvertimeRule, error) {
+	return s.ruleRepo.GetByID(id)
+}
+
+func (s *OvertimeService) GetAllRules() ([]core.OvertimeRule, error) {
+	return s.ruleRepo.List()
+}
+
+func (s *OvertimeService) DeleteRule(id uint) error {
+	return s.ruleRepo.Delete(id)
+}
+
+// --- PublicHoliday CRUD ---
+
+func (s *OvertimeService) CreateHoliday(h *core.PublicHoliday) error {
+	return s.ruleRepo.CreateHoliday(h)
+}
+
+func (s *OvertimeService) UpdateHoliday(h *core.PublicHoliday) error {
+	return s.ruleRepo.UpdateHoliday(h)
+}
+
+func (s *OvertimeService) GetHoliday(id uint) (*core.PublicHoliday, error) {
+	return s.ruleRepo.GetHolidayByID(id)
+}
+
+func (s *OvertimeService) GetHolidays(year int) ([]core.PublicHoliday, error) {
+	return s.ruleRepo.ListHolidays(year)
+}
+
+func (s *OvertimeService) DeleteHoliday(id uint) error {
+	return s.ruleRepo.DeleteHoliday(id)
+}
+
+func defaultOvertimeRule() *core.OvertimeRule {
+	return &core.OvertimeRule{
+		WeeklyHourLimit:    45,
+		DailyHourLimit:     11,
+		OvertimeMultiplier: 1.5,
+		WeekendMultiplier:  2.0,
+		HolidayMultiplier:  2.5,
+		NightShiftExtra:    0.1,
+	}
+}

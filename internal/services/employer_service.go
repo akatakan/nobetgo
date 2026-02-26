@@ -7,6 +7,7 @@ import (
 
 	"github.com/akatakan/nobetgo/internal/core"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
 )
 
 type EmployeeRepositoryInterface interface {
@@ -16,6 +17,7 @@ type EmployeeRepositoryInterface interface {
 	ListByDepartment(departmentID uint) ([]core.Employee, error)
 	Update(employee *core.Employee) error
 	Delete(id uint) error
+	GetDB() *gorm.DB
 }
 
 type EmployeeService struct {

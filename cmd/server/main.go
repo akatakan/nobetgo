@@ -41,8 +41,16 @@ func main() {
 		&core.Title{},
 		&core.Employee{},
 		&core.ShiftType{},
+		&core.RotationPlan{},
 		&core.Schedule{},
-		&core.Attendance{},
+		&core.TimeEntry{},
+		&core.LeaveType{},
+		&core.Leave{},
+		&core.LeaveBalance{},
+		&core.OvertimeRule{},
+		&core.PublicHoliday{},
+		&core.AuditLog{},
+		&core.Notification{}, // <-- new notification model
 	)
 	if err != nil {
 		slog.Error("Cannot migrate database", "error", err)
@@ -53,39 +61,67 @@ func main() {
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_email_unique ON employees (email) WHERE email != '' AND deleted_at IS NULL")
 	slog.Info("Database migration completed")
 
-	// Initialize Layers - Department
+	// ===== Initialize Layers =====
+
+	// Department
 	departmentRepo := repositories.NewDepartmentRepository(db)
 	departmentService := services.NewDepartmentService(departmentRepo)
 	departmentHandler := handlers.NewDepartmentHandler(departmentService)
 
-	// Initialize Layers - Title
+	// Title
 	titleRepo := repositories.NewTitleRepository(db)
 	titleService := services.NewTitleService(titleRepo)
 	titleHandler := handlers.NewTitleHandler(titleService)
 
-	// Initialize Layers - Employee
+	// Employee
 	employeeRepo := repositories.NewEmployeeRepository(db)
 	employeeService := services.NewEmployeeService(employeeRepo, departmentRepo, titleRepo)
 	employeeHandler := handlers.NewEmployeeHandler(employeeService)
 
-	// Initialize Layers - ShiftType
+	// ShiftType
 	shiftTypeRepo := repositories.NewShiftTypeRepository(db)
 	shiftTypeService := services.NewShiftTypeService(shiftTypeRepo)
 	shiftTypeHandler := handlers.NewShiftTypeHandler(shiftTypeService)
 
-	// Initialize Layers - Schedule
+	// Schedule
 	scheduleRepo := repositories.NewScheduleRepository(db)
 	schedulerService := services.NewSchedulerService(scheduleRepo, employeeRepo, shiftTypeRepo)
 	scheduleHandler := handlers.NewScheduleHandler(schedulerService)
 
-	// Initialize Layers - Attendance
-	attendanceRepo := repositories.NewAttendanceRepository(db)
-	timekeepingService := services.NewTimekeepingService(attendanceRepo, scheduleRepo)
-	attendanceHandler := handlers.NewAttendanceHandler(timekeepingService)
+	// TimeEntry (Puantaj)
+	timeEntryRepo := repositories.NewTimeEntryRepository(db)
+	timekeepingService := services.NewTimekeepingService(timeEntryRepo, scheduleRepo)
+	timeEntryHandler := handlers.NewTimeEntryHandler(timekeepingService)
+
+	// Leave (İzin)
+	leaveRepo := repositories.NewLeaveRepository(db)
+	leaveService := services.NewLeaveService(leaveRepo)
+	leaveHandler := handlers.NewLeaveHandler(leaveService)
+
+	// Overtime (Mesai)
+	overtimeRuleRepo := repositories.NewOvertimeRuleRepository(db)
+	overtimeService := services.NewOvertimeService(overtimeRuleRepo, timeEntryRepo)
+	overtimeHandler := handlers.NewOvertimeHandler(overtimeService)
+
+	// Approval (Onay)
+	auditLogRepo := repositories.NewAuditLogRepository(db)
+	approvalService := services.NewApprovalService(auditLogRepo, timeEntryRepo, leaveRepo)
+	approvalHandler := handlers.NewApprovalHandler(approvalService)
+
+	// Reporting (Raporlama)
+	reportingService := services.NewReportingService(timeEntryRepo, leaveRepo, overtimeRuleRepo)
+	reportingHandler := handlers.NewReportingHandler(reportingService)
+
+	// Notification (Bildirimler)
+	notificationRepo := repositories.NewNotificationRepository(db)
+	notificationService := services.NewNotificationService(notificationRepo)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
+
+	// ===== Router =====
 
 	router := gin.New()
 
-	// Request logging middleware (replaces gin.Default logger)
+	// Request logging middleware
 	router.Use(logger.GinLoggerMiddleware())
 	router.Use(gin.Recovery())
 
@@ -110,6 +146,7 @@ func main() {
 
 	api := router.Group("/api/v1")
 	{
+		// Department
 		departments := api.Group("/departments")
 		{
 			departments.POST("", departmentHandler.CreateDepartment)
@@ -119,6 +156,7 @@ func main() {
 			departments.DELETE("/:id", departmentHandler.DeleteDepartment)
 		}
 
+		// Title
 		titles := api.Group("/titles")
 		{
 			titles.POST("", titleHandler.CreateTitle)
@@ -128,16 +166,18 @@ func main() {
 			titles.DELETE("/:id", titleHandler.DeleteTitle)
 		}
 
+		// Employee
 		employees := api.Group("/employees")
 		{
 			employees.POST("", employeeHandler.CreateEmployee)
 			employees.GET("", employeeHandler.GetAllEmployees)
-			employees.POST("/import", employeeHandler.ImportEmployees) // Added import route
+			employees.POST("/import", employeeHandler.ImportEmployees)
 			employees.GET("/:id", employeeHandler.GetEmployee)
 			employees.PUT("/:id", employeeHandler.UpdateEmployee)
 			employees.DELETE("/:id", employeeHandler.DeleteEmployee)
 		}
 
+		// ShiftType (Çalışma Tipleri)
 		shiftTypes := api.Group("/shift-types")
 		{
 			shiftTypes.POST("", shiftTypeHandler.CreateShiftType)
@@ -147,21 +187,106 @@ func main() {
 			shiftTypes.DELETE("/:id", shiftTypeHandler.DeleteShiftType)
 		}
 
+		// Schedule (Nöbet Çizelgesi)
 		schedules := api.Group("/schedules")
 		{
 			schedules.POST("/generate", scheduleHandler.GenerateSchedule)
-			schedules.POST("", scheduleHandler.CreateSingleSchedule) // Manual add
+			schedules.POST("", scheduleHandler.CreateSingleSchedule)
 			schedules.PUT("/:id", scheduleHandler.UpdateSchedule)
 			schedules.GET("", scheduleHandler.GetSchedule)
 			schedules.DELETE("/clear", scheduleHandler.ClearSchedule)
-			schedules.DELETE("/:id", scheduleHandler.DeleteSchedule) // Manual delete
+			schedules.DELETE("/:id", scheduleHandler.DeleteSchedule)
 		}
 
-		attendance := api.Group("/attendance")
+		// TimeEntry (Puantaj — Giriş/Çıkış)
+		timeEntries := api.Group("/time-entries")
 		{
-			attendance.POST("", attendanceHandler.LogAttendance)
-			attendance.PUT("/:id", attendanceHandler.UpdateAttendance) // Manual update
-			attendance.GET("/reports", attendanceHandler.GetPayrollReport)
+			timeEntries.POST("/clock-in", timeEntryHandler.ClockIn)
+			timeEntries.POST("/clock-out", timeEntryHandler.ClockOut)
+			timeEntries.POST("", timeEntryHandler.CreateTimeEntry)
+			timeEntries.GET("", timeEntryHandler.ListTimeEntries)
+			timeEntries.GET("/:id", timeEntryHandler.GetTimeEntry)
+			timeEntries.PUT("/:id", timeEntryHandler.UpdateTimeEntry)
+			timeEntries.DELETE("/:id", timeEntryHandler.DeleteTimeEntry)
+		}
+
+		// Leave (İzin Yönetimi)
+		leaves := api.Group("/leaves")
+		{
+			leaves.POST("", leaveHandler.RequestLeave)
+			leaves.GET("", leaveHandler.ListLeaves)
+			leaves.GET("/balance", leaveHandler.GetLeaveBalance)
+			leaves.GET("/:id", leaveHandler.GetLeave)
+			leaves.POST("/:id/approve", leaveHandler.ApproveLeave)
+			leaves.POST("/:id/reject", leaveHandler.RejectLeave)
+		}
+
+		// LeaveType (İzin Türleri)
+		leaveTypes := api.Group("/leave-types")
+		{
+			leaveTypes.POST("", leaveHandler.CreateLeaveType)
+			leaveTypes.GET("", leaveHandler.GetAllLeaveTypes)
+			leaveTypes.GET("/:id", leaveHandler.GetLeaveType)
+			leaveTypes.PUT("/:id", leaveHandler.UpdateLeaveType)
+			leaveTypes.DELETE("/:id", leaveHandler.DeleteLeaveType)
+		}
+
+		// Overtime (Mesai Hesaplama)
+		overtime := api.Group("/overtime")
+		{
+			overtime.GET("/calculate", overtimeHandler.CalculateOvertime)
+			overtime.GET("/summary", overtimeHandler.GetDepartmentSummary)
+		}
+
+		// OvertimeRule (Mesai Kuralları)
+		overtimeRules := api.Group("/overtime-rules")
+		{
+			overtimeRules.POST("", overtimeHandler.CreateRule)
+			overtimeRules.GET("", overtimeHandler.GetAllRules)
+			overtimeRules.GET("/:id", overtimeHandler.GetRule)
+			overtimeRules.PUT("/:id", overtimeHandler.UpdateRule)
+			overtimeRules.DELETE("/:id", overtimeHandler.DeleteRule)
+		}
+
+		// PublicHoliday (Resmi Tatiller)
+		holidays := api.Group("/public-holidays")
+		{
+			holidays.POST("", overtimeHandler.CreateHoliday)
+			holidays.GET("", overtimeHandler.GetHolidays)
+			holidays.PUT("/:id", overtimeHandler.UpdateHoliday)
+			holidays.DELETE("/:id", overtimeHandler.DeleteHoliday)
+		}
+
+		// Approval (Onay Mekanizması)
+		approvals := api.Group("/approvals")
+		{
+			approvals.GET("/pending", approvalHandler.GetPendingApprovals)
+			approvals.POST("/time-entry/:id/approve", approvalHandler.ApproveTimeEntry)
+			approvals.POST("/time-entry/:id/reject", approvalHandler.RejectTimeEntry)
+		}
+
+		// AuditLog (Denetim İzi)
+		auditLogs := api.Group("/audit-logs")
+		{
+			auditLogs.GET("", approvalHandler.GetAuditLogs)
+		}
+
+		// Reports (Raporlama)
+		reports := api.Group("/reports")
+		{
+			reports.GET("/work-hours", reportingHandler.GetWorkHoursReport)
+			reports.GET("/absences", reportingHandler.GetAbsenceReport)
+			reports.GET("/employee-summary", reportingHandler.GetEmployeeSummary)
+			reports.GET("/trends", reportingHandler.GetTrendAnalysis)
+			reports.GET("/cost-analysis", reportingHandler.GetCostAnalysis)
+		}
+
+		// Notifications (Bildirimler)
+		notifications := api.Group("/notifications")
+		{
+			notifications.GET("/unread", notificationHandler.GetUnread)
+			notifications.POST("/:id/read", notificationHandler.MarkAsRead)
+			notifications.POST("/read-all", notificationHandler.MarkAllAsRead)
 		}
 	}
 

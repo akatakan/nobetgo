@@ -3,76 +3,197 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/akatakan/nobetgo/internal/core"
 	"github.com/akatakan/nobetgo/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
-type AttendanceHandler struct {
+// TimeEntryHandler handles HTTP requests for time entries.
+type TimeEntryHandler struct {
 	service *services.TimekeepingService
 }
 
-func NewAttendanceHandler(service *services.TimekeepingService) *AttendanceHandler {
-	return &AttendanceHandler{service: service}
+// NewTimeEntryHandler creates a new TimeEntryHandler.
+func NewTimeEntryHandler(service *services.TimekeepingService) *TimeEntryHandler {
+	return &TimeEntryHandler{service: service}
 }
 
-func (h *AttendanceHandler) LogAttendance(c *gin.Context) {
-	var req core.AttendanceRequest
+// ClockIn handles POST /time-entries/clock-in
+func (h *TimeEntryHandler) ClockIn(c *gin.Context) {
+	var req core.ClockInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	attendance, err := h.service.LogAttendance(req)
+	entry, err := h.service.ClockIn(req)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, entry)
+}
+
+// ClockOut handles POST /time-entries/clock-out
+func (h *TimeEntryHandler) ClockOut(c *gin.Context) {
+	var req core.ClockOutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	entry, err := h.service.ClockOut(req)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, entry)
+}
+
+// CreateTimeEntry handles POST /time-entries
+func (h *TimeEntryHandler) CreateTimeEntry(c *gin.Context) {
+	var req core.TimeEntryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	entry, err := h.service.CreateTimeEntry(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, attendance)
+	c.JSON(http.StatusCreated, entry)
 }
 
-func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
-	idStr := c.Param("id")
+// UpdateTimeEntry handles PUT /time-entries/:id
+func (h *TimeEntryHandler) UpdateTimeEntry(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return
+	}
+
+	var req core.TimeEntryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	entry, err := h.service.UpdateTimeEntry(id, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, entry)
+}
+
+// DeleteTimeEntry handles DELETE /time-entries/:id
+func (h *TimeEntryHandler) DeleteTimeEntry(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return
+	}
+
+	if err := h.service.DeleteTimeEntry(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Kayıt silindi"})
+}
+
+// GetTimeEntry handles GET /time-entries/:id
+func (h *TimeEntryHandler) GetTimeEntry(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return
+	}
+
+	entry, err := h.service.GetTimeEntry(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, entry)
+}
+
+// ListTimeEntries handles GET /time-entries with query params: employee_id, department_id, start, end
+func (h *TimeEntryHandler) ListTimeEntries(c *gin.Context) {
+	start, end, err := parseDateRange(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if empIDStr := c.Query("employee_id"); empIDStr != "" {
+		empID, _ := strconv.ParseUint(empIDStr, 10, 32)
+		entries, err := h.service.GetEmployeeTimeEntries(uint(empID), start, end)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, entries)
+		return
+	}
+
+	if deptIDStr := c.Query("department_id"); deptIDStr != "" {
+		deptID, _ := strconv.ParseUint(deptIDStr, 10, 32)
+		entries, err := h.service.GetDepartmentTimeEntries(uint(deptID), start, end)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, entries)
+		return
+	}
+
+	entries, err := h.service.GetTimeEntriesByDateRange(start, end)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, entries)
+}
+
+// --- Helper functions ---
+
+func parseUintParam(c *gin.Context, name string) (uint, error) {
+	idStr := c.Param(name)
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz ID"})
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz " + name})
+		return 0, err
 	}
-
-	var req core.AttendanceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	attendance, err := h.service.UpdateAttendance(uint(id), req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, attendance)
+	return uint(id), nil
 }
 
-func (h *AttendanceHandler) GetPayrollReport(c *gin.Context) {
-	monthStr := c.Query("month")
-	yearStr := c.Query("year")
+func parseDateRange(c *gin.Context) (time.Time, time.Time, error) {
+	startStr := c.Query("start")
+	endStr := c.Query("end")
 
-	if monthStr == "" || yearStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "month and year are required"})
-		return
+	if startStr == "" || endStr == "" {
+		// Default to current month
+		now := time.Now()
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(0, 1, 0)
+		return start, end, nil
 	}
 
-	month, _ := strconv.Atoi(monthStr)
-	year, _ := strconv.Atoi(yearStr)
-
-	report, err := h.service.GetPayrollReport(month, year)
+	start, err := time.Parse("2006-01-02", startStr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return time.Time{}, time.Time{}, err
+	}
+	end, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
 	}
 
-	c.JSON(http.StatusOK, report)
+	return start, end, nil
 }

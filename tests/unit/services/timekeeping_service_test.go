@@ -1,6 +1,7 @@
 package services_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -9,112 +10,140 @@ import (
 	mocks "github.com/akatakan/nobetgo/tests/mocks/repositories"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gorm.io/gorm"
 )
 
-// Mock Repo
-type MockAttendanceRepo struct {
-	mock.Mock
-}
-
-func (m *MockAttendanceRepo) Create(attendance *core.Attendance) error {
-	args := m.Called(attendance)
-	return args.Error(0)
-}
-
-func (m *MockAttendanceRepo) Update(attendance *core.Attendance) error {
-	args := m.Called(attendance)
-	return args.Error(0)
-}
-
-func (m *MockAttendanceRepo) GetByID(id uint) (*core.Attendance, error) {
-	args := m.Called(id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*core.Attendance), args.Error(1)
-}
-
-func (m *MockAttendanceRepo) GetCombinedReport(month int, year int) ([]core.Attendance, error) {
-	args := m.Called(month, year)
-	return args.Get(0).([]core.Attendance), args.Error(1)
-}
-
-func TestLogAttendance_Overtime(t *testing.T) {
-	mockRepo := new(MockAttendanceRepo)
-	mockScheduleRepo := new(mocks.MockScheduleRepository) // Use existing mock package
-	service := services.NewTimekeepingService(mockRepo, mockScheduleRepo)
-
-	// Mock GetByID for overtime calculation
-	schedule := &core.Schedule{
-		Model: gorm.Model{ID: 1},
-		ShiftType: core.ShiftType{
-			StartTime: "08:00",
-			EndTime:   "16:00", // 8 hours duration
-		},
-	}
-	mockScheduleRepo.On("GetByID", uint(1)).Return(schedule, nil)
-
-	// Case 1: 10 hours work (2 hours overtime)
-	startTime := time.Date(2025, 2, 1, 8, 0, 0, 0, time.UTC)
-	endTime := startTime.Add(10 * time.Hour)
-
-	req := core.AttendanceRequest{
-		ScheduleID:      1,
-		ActualStartTime: startTime,
-		ActualEndTime:   endTime,
-		Notes:           "Overtime",
-	}
-
-	mockRepo.On("Create", mock.MatchedBy(func(a *core.Attendance) bool {
-		return a.IsOvertime == true && a.OvertimeHours == 2.0
-	})).Return(nil)
-
-	attendance, err := service.LogAttendance(req)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, attendance)
-	assert.True(t, attendance.IsOvertime)
-	assert.Equal(t, 2.0, attendance.OvertimeHours)
-
-	mockRepo.AssertExpectations(t)
-	mockScheduleRepo.AssertExpectations(t)
-}
-
-func TestLogAttendance_Normal(t *testing.T) {
-	mockRepo := new(MockAttendanceRepo)
+func TestClockIn_Success(t *testing.T) {
+	mockTimeEntryRepo := new(mocks.MockTimeEntryRepository)
 	mockScheduleRepo := new(mocks.MockScheduleRepository)
-	service := services.NewTimekeepingService(mockRepo, mockScheduleRepo)
+	service := services.NewTimekeepingService(mockTimeEntryRepo, mockScheduleRepo)
 
-	// Mock GetByID
-	schedule := &core.Schedule{
-		Model: gorm.Model{ID: 1},
-		ShiftType: core.ShiftType{
-			StartTime: "08:00",
-			EndTime:   "16:00", // 8 hours
-		},
-	}
-	mockScheduleRepo.On("GetByID", uint(1)).Return(schedule, nil)
+	// No open entry exists
+	mockTimeEntryRepo.On("GetOpenEntry", uint(1)).Return(nil, errors.New("not found"))
+	mockTimeEntryRepo.On("Create", mock.AnythingOfType("*core.TimeEntry")).Return(nil)
 
-	// Case 2: 8 hours work (No overtime)
-	startTime := time.Date(2025, 2, 1, 8, 0, 0, 0, time.UTC)
-	endTime := startTime.Add(8 * time.Hour)
-
-	req := core.AttendanceRequest{
-		ScheduleID:      1,
-		ActualStartTime: startTime,
-		ActualEndTime:   endTime,
-		Notes:           "Normal shift",
+	req := core.ClockInRequest{
+		EmployeeID: 1,
+		Notes:      "Sabah girişi",
 	}
 
-	mockRepo.On("Create", mock.MatchedBy(func(a *core.Attendance) bool {
-		return a.IsOvertime == false && a.OvertimeHours == 0.0
-	})).Return(nil)
-
-	attendance, err := service.LogAttendance(req)
+	entry, err := service.ClockIn(req)
 
 	assert.NoError(t, err)
-	assert.False(t, attendance.IsOvertime)
+	assert.NotNil(t, entry)
+	assert.Equal(t, uint(1), entry.EmployeeID)
+	assert.Equal(t, "auto", entry.Source)
+	assert.Equal(t, "pending", entry.Status)
+	assert.Nil(t, entry.ClockOut)
 
-	mockRepo.AssertExpectations(t)
+	mockTimeEntryRepo.AssertExpectations(t)
+}
+
+func TestClockIn_AlreadyOpen(t *testing.T) {
+	mockTimeEntryRepo := new(mocks.MockTimeEntryRepository)
+	mockScheduleRepo := new(mocks.MockScheduleRepository)
+	service := services.NewTimekeepingService(mockTimeEntryRepo, mockScheduleRepo)
+
+	// Open entry exists
+	existing := &core.TimeEntry{EmployeeID: 1, ClockIn: time.Now()}
+	existing.ID = 5
+	mockTimeEntryRepo.On("GetOpenEntry", uint(1)).Return(existing, nil)
+
+	req := core.ClockInRequest{EmployeeID: 1}
+	entry, err := service.ClockIn(req)
+
+	assert.Error(t, err)
+	assert.Nil(t, entry)
+	assert.Contains(t, err.Error(), "açık bir giriş kaydı var")
+}
+
+func TestClockOut_Success(t *testing.T) {
+	mockTimeEntryRepo := new(mocks.MockTimeEntryRepository)
+	mockScheduleRepo := new(mocks.MockScheduleRepository)
+	service := services.NewTimekeepingService(mockTimeEntryRepo, mockScheduleRepo)
+
+	// Open entry exists — clocked in 8 hours ago
+	clockIn := time.Now().Add(-8 * time.Hour)
+	existing := &core.TimeEntry{
+		EmployeeID: 1,
+		ClockIn:    clockIn,
+		EntryType:  "normal",
+		Source:     "auto",
+		Status:     "pending",
+	}
+	existing.ID = 10
+
+	mockTimeEntryRepo.On("GetOpenEntry", uint(1)).Return(existing, nil)
+	mockTimeEntryRepo.On("Update", mock.AnythingOfType("*core.TimeEntry")).Return(nil)
+
+	req := core.ClockOutRequest{EmployeeID: 1}
+	entry, err := service.ClockOut(req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, entry)
+	assert.NotNil(t, entry.ClockOut)
+
+	mockTimeEntryRepo.AssertExpectations(t)
+}
+
+func TestClockOut_NoOpenEntry(t *testing.T) {
+	mockTimeEntryRepo := new(mocks.MockTimeEntryRepository)
+	mockScheduleRepo := new(mocks.MockScheduleRepository)
+	service := services.NewTimekeepingService(mockTimeEntryRepo, mockScheduleRepo)
+
+	mockTimeEntryRepo.On("GetOpenEntry", uint(1)).Return(nil, errors.New("not found"))
+
+	req := core.ClockOutRequest{EmployeeID: 1}
+	entry, err := service.ClockOut(req)
+
+	assert.Error(t, err)
+	assert.Nil(t, entry)
+	assert.Contains(t, err.Error(), "açık giriş kaydı bulunamadı")
+}
+
+func TestCreateTimeEntry_Normal(t *testing.T) {
+	mockTimeEntryRepo := new(mocks.MockTimeEntryRepository)
+	mockScheduleRepo := new(mocks.MockScheduleRepository)
+	service := services.NewTimekeepingService(mockTimeEntryRepo, mockScheduleRepo)
+
+	clockIn := time.Date(2026, 2, 26, 8, 0, 0, 0, time.UTC)
+	clockOut := time.Date(2026, 2, 26, 16, 0, 0, 0, time.UTC)
+
+	mockTimeEntryRepo.On("Create", mock.AnythingOfType("*core.TimeEntry")).Return(nil)
+
+	req := core.TimeEntryRequest{
+		EmployeeID: 1,
+		ClockIn:    clockIn,
+		ClockOut:   &clockOut,
+		Notes:      "Normal mesai",
+	}
+
+	entry, err := service.CreateTimeEntry(req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, entry)
+	assert.Equal(t, "manual", entry.Source)
+	assert.Equal(t, "pending", entry.Status)
+
+	mockTimeEntryRepo.AssertExpectations(t)
+}
+
+func TestCreateTimeEntry_InvalidTimes(t *testing.T) {
+	mockTimeEntryRepo := new(mocks.MockTimeEntryRepository)
+	mockScheduleRepo := new(mocks.MockScheduleRepository)
+	service := services.NewTimekeepingService(mockTimeEntryRepo, mockScheduleRepo)
+
+	clockIn := time.Date(2026, 2, 26, 16, 0, 0, 0, time.UTC)
+	clockOut := time.Date(2026, 2, 26, 8, 0, 0, 0, time.UTC) // Before clock-in
+
+	req := core.TimeEntryRequest{
+		EmployeeID: 1,
+		ClockIn:    clockIn,
+		ClockOut:   &clockOut,
+	}
+
+	entry, err := service.CreateTimeEntry(req)
+
+	assert.Error(t, err)
+	assert.Nil(t, entry)
+	assert.Contains(t, err.Error(), "çıkış saati giriş saatinden önce olamaz")
 }

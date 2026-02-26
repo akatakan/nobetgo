@@ -24,6 +24,8 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
         employee_ids: [],
         overtime_threshold: 45,
         overtime_multiplier: 1.5,
+        scheduling_mode: 'normal',
+        beds_per_personnel: 5,
     });
     const [resultCount, setResultCount] = useState(0);
 
@@ -327,6 +329,51 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
                                 value={params.overtime_multiplier}
                                 onChange={(e) => setParams({ ...params, overtime_multiplier: Number(e.target.value) })}
                             />
+                        </div>
+                        <div className="space-y-4 col-span-2 mt-2 pt-4 border-t border-white/5">
+                            <h4 className="font-semibold flex items-center gap-2">
+                                <Wand2 className="w-4 h-4 text-purple-400" />
+                                Gelişmiş Atama Modu
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm text-gray-400 font-medium">Atama Modeli</label>
+                                    <select
+                                        className="glass-input w-full"
+                                        value={params.scheduling_mode}
+                                        onChange={(e) => setParams({ ...params, scheduling_mode: e.target.value })}
+                                    >
+                                        <option value="normal">Normal (Adil Dağılım)</option>
+                                        <option value="bed_capacity">Yatak Kapasitesine Göre (Yoğunluk)</option>
+                                        <option value="fatigue_aware">Yorgunluk Duyarlı (Fatigue-Aware)</option>
+                                    </select>
+                                </div>
+                                {params.scheduling_mode === 'bed_capacity' && (
+                                    <div className="space-y-2 animate-scale-in">
+                                        <label className="text-sm text-gray-400 font-medium">1 Personel / Kaç Yatak</label>
+                                        <input
+                                            type="number"
+                                            className="glass-input w-full"
+                                            value={params.beds_per_personnel}
+                                            onChange={(e) => setParams({ ...params, beds_per_personnel: Number(e.target.value) })}
+                                            min={1}
+                                        />
+                                        <p className="text-[10px] text-gray-500 mt-1">
+                                            Bölüm kapasitesini bu sayıya bölerek vardiya başına personel atar. (Örn: 50 Yatak / 10 = vardiyada 5 hemşire)
+                                        </p>
+                                    </div>
+                                )}
+                                {params.scheduling_mode === 'fatigue_aware' && (
+                                    <div className="space-y-2 animate-scale-in col-span-2">
+                                        <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                                            <p className="text-xs text-purple-300">
+                                                <span className="font-bold">Yorgunluk Duyarlı (Fatigue-Aware): </span>
+                                                Bu model nöbetleri dağıtırken çalışanların geçmiş yorgunluk skorlarını hesaplar ve adil bir dinlenme sağlar. Riski artan çalışanlara zorunlu ara verir.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="flex gap-3 mt-8">

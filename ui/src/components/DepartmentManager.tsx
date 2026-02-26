@@ -7,6 +7,7 @@ const emptyForm: DepartmentFormData = {
     Name: '',
     Floor: 1,
     Description: '',
+    BedCapacity: 0,
 };
 
 const DepartmentManager: React.FC = () => {
@@ -59,7 +60,8 @@ const DepartmentManager: React.FC = () => {
         setFormData({
             Name: dept.Name,
             Floor: dept.Floor,
-            Description: dept.Description,
+            Description: dept.Description || '',
+            BedCapacity: dept.BedCapacity || 0,
         });
         setShowForm(true);
     };
@@ -125,9 +127,19 @@ const DepartmentManager: React.FC = () => {
                             <label className="text-xs text-gray-400 font-medium">Kat *</label>
                             <input
                                 type="number"
+                                className="glass-input w-full"
                                 value={formData.Floor}
                                 onChange={(e) => setFormData({ ...formData, Floor: Number(e.target.value) })}
                                 required
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-gray-400 font-medium">Yatak Kapasitesi</label>
+                            <input
+                                type="number"
+                                className="glass-input w-full"
+                                value={formData.BedCapacity || ''}
+                                onChange={(e) => setFormData({ ...formData, BedCapacity: Number(e.target.value) })}
                             />
                         </div>
                         <div className="space-y-1">
@@ -182,7 +194,7 @@ const DepartmentManager: React.FC = () => {
                                         {dept.Name}
                                     </div>
                                     <div className="text-gray-400 text-sm">
-                                        {dept.Floor}. Kat
+                                        {dept.Floor}. Kat {dept.BedCapacity ? `• ${dept.BedCapacity} Yatak` : ''}
                                     </div>
                                     {dept.Description && (
                                         <div className="text-gray-500 text-xs mt-1 truncate">

@@ -12,6 +12,7 @@ const emptyForm: EmployeeFormData = {
     Phone: '',
     HourlyRate: 50,
     IsShiftWorker: true,
+    Competencies: '',
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -102,6 +103,7 @@ const EmployeeManager: React.FC = () => {
             Phone: emp.Phone,
             HourlyRate: emp.HourlyRate,
             IsShiftWorker: emp.IsShiftWorker !== undefined ? emp.IsShiftWorker : true,
+            Competencies: emp.Competencies || '',
         });
         setShowForm(true);
     };
@@ -280,6 +282,15 @@ const EmployeeManager: React.FC = () => {
                                 onChange={(e) => setFormData({ ...formData, HourlyRate: Number(e.target.value) })}
                             />
                         </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-gray-400 font-medium">Yetkinlikler (Örn: Cerrahi, Yoğun Bakım)</label>
+                            <input
+                                placeholder="Virgül ile ayırın"
+                                className="glass-input w-full"
+                                value={formData.Competencies || ''}
+                                onChange={(e) => setFormData({ ...formData, Competencies: e.target.value })}
+                            />
+                        </div>
                         <div className="space-y-1 flex items-end pb-2">
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input
@@ -345,6 +356,11 @@ const EmployeeManager: React.FC = () => {
                                             <div className="flex flex-col">
                                                 <span>{getDeptName(emp.DepartmentID)}</span>
                                                 <span className="text-xs text-gray-500">{getTitleName(emp.TitleID)}</span>
+                                                {emp.Competencies && (
+                                                    <span className="text-xs text-blue-400 mt-1 truncate max-w-[150px]" title={emp.Competencies}>
+                                                        {emp.Competencies}
+                                                    </span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-gray-400">

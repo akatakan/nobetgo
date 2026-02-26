@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Loader2, Trash2, Printer, FileSpreadsheet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Loader2, Trash2, Printer, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import { scheduleApi, departmentApi } from '../services/api';
 import type { Schedule, Department } from '../types';
 import * as XLSX from 'xlsx';
@@ -457,24 +457,50 @@ const ScheduleViewer: React.FC = () => {
                                                 </button>
                                             </div>
                                             <div className="space-y-1">
-                                                {schedules.map((s) => (
-                                                    <div
-                                                        key={s.ID}
-                                                        draggable
-                                                        onDragStart={(e) => handleDragStart(e, s)}
-                                                        onDragEnd={handleDragEnd}
-                                                        onClick={() => handleEditSchedule(s)}
-                                                        className="text-[10px] px-1.5 py-0.5 rounded-md truncate cursor-pointer hover:scale-[1.02] hover:shadow-md active:cursor-grabbing transition-all group/item relative"
-                                                        style={{
-                                                            backgroundColor: (s.ShiftType?.Color || '#3b82f6') + '25',
-                                                            color: s.ShiftType?.Color || '#3b82f6',
-                                                            borderLeft: `2px solid ${s.ShiftType?.Color || '#3b82f6'}`,
-                                                        }}
-                                                        title={`${s.Employee?.FirstName} ${s.Employee?.LastName} — ${s.ShiftType?.Name}`}
-                                                    >
-                                                        {s.Employee?.FirstName} {s.Employee?.LastName}
-                                                    </div>
-                                                ))}
+                                                {schedules.map((s) => {
+                                                    const fScore = s.Employee?.FatigueScore || 0;
+                                                    const isExtremelyTired = fScore >= 50;
+                                                    const isTired = fScore >= 40 && fScore < 50;
+
+                                                    // Heatmap bg overrides shift type color if tired
+                                                    let bgStatusColor = (s.ShiftType?.Color || '#3b82f6') + '25';
+                                                    let borderStatusColor = s.ShiftType?.Color || '#3b82f6';
+                                                    if (isExtremelyTired) {
+                                                        bgStatusColor = 'rgba(239, 68, 68, 0.2)'; // Tailwind red-500
+                                                        borderStatusColor = '#ef4444';
+                                                    } else if (isTired) {
+                                                        bgStatusColor = 'rgba(245, 158, 11, 0.2)'; // Tailwind amber-500
+                                                        borderStatusColor = '#f59e0b';
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            key={s.ID}
+                                                            draggable
+                                                            onDragStart={(e) => handleDragStart(e, s)}
+                                                            onDragEnd={handleDragEnd}
+                                                            onClick={() => handleEditSchedule(s)}
+                                                            className="text-[10px] px-1.5 py-0.5 rounded-md truncate cursor-pointer hover:scale-[1.02] hover:shadow-md active:cursor-grabbing transition-all group/item relative flex items-center justify-between"
+                                                            style={{
+                                                                backgroundColor: bgStatusColor,
+                                                                color: borderStatusColor,
+                                                                borderLeft: `2px solid ${borderStatusColor}`,
+                                                            }}
+                                                            title={`${s.Employee?.FirstName} ${s.Employee?.LastName} — ${s.ShiftType?.Name}`}
+                                                        >
+                                                            <span className="truncate">{s.Employee?.FirstName} {s.Employee?.LastName}</span>
+                                                            {(isTired || isExtremelyTired) && (
+                                                                <div
+                                                                    className="group/tooltip relative ml-1"
+                                                                    aria-label="Tükenmişlik Riski"
+                                                                    title={isExtremelyTired ? `Kritik Uyarı: Bu personel sınırın ötesinde nöbet tutuyor (Yorgunluk: ${fScore}). Hata yapma riski yüksek!` : `Dikkat: Bu personel oldukça yorgun (Yorgunluk: ${fScore}).`}
+                                                                >
+                                                                    <AlertCircle className={`w-3 h-3 ${isExtremelyTired ? 'text-red-500 animate-pulse' : 'text-amber-500'}`} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         </>
                                     )}
