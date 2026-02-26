@@ -28,10 +28,10 @@ const ReportingDashboard: React.FC = () => {
     const [employeeSummary, setEmployeeSummary] = useState<any>(null);
 
     useEffect(() => {
-        Promise.all([departmentApi.list(), employeeApi.list()])
+        Promise.all([departmentApi.list(), employeeApi.list({ page: 1, limit: 1000 })])
             .then(([dRes, eRes]) => {
                 setDepartments(dRes.data);
-                setEmployees(eRes.data);
+                setEmployees(eRes.data.data);
                 if (dRes.data.length > 0 && selectedDept === 0) setSelectedDept(dRes.data[0].ID);
             }).catch(console.error);
     }, []);

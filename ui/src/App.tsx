@@ -33,7 +33,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
           departmentApi.list(),
         ]);
         setStats({
-          employees: empRes.status === 'fulfilled' ? empRes.value.data.data.length : 0,
+          employees: empRes.status === 'fulfilled' ? empRes.value.data.total : 0,
           shifts: shiftRes.status === 'fulfilled' ? shiftRes.value.data.length : 0,
           schedules: schedRes.status === 'fulfilled' ? schedRes.value.data.length : 0,
           departments: deptRes.status === 'fulfilled' ? deptRes.value.data.length : 0,
