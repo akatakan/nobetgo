@@ -1,21 +1,21 @@
 package handlers
 
 import (
+	"fmt"
+	"log/slog"
 	"net/http"
 
-	"github.com/akatakan/nobetgo/config"
-	"github.com/akatakan/nobetgo/internal/repositories"
+	"github.com/akatakan/nobetgo/internal/services"
 	"github.com/akatakan/nobetgo/util"
 	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
-	repo   *repositories.EmployeeRepository
-	config config.Config
+	service *services.AuthService
 }
 
-func NewAuthHandler(repo *repositories.EmployeeRepository, config config.Config) *AuthHandler {
-	return &AuthHandler{repo: repo, config: config}
+func NewAuthHandler(service *services.AuthService) *AuthHandler {
+	return &AuthHandler{service: service}
 }
 
 type LoginRequest struct {
@@ -30,30 +30,74 @@ type LoginResponse struct {
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		util.BadRequest(c, "Geçersiz istek", err)
+	if err := h.utilBindJSON(c, &req); err != nil {
 		return
 	}
 
-	employee, err := h.repo.GetByEmail(req.Email)
+	token, role, err := h.service.Login(req.Email, req.Password)
 	if err != nil {
-		util.Unauthorized(c, "Geçersiz e-posta veya şifre")
-		return
-	}
-
-	if !util.CheckPasswordHash(req.Password, employee.PasswordHash) {
-		util.Unauthorized(c, "Geçersiz e-posta veya şifre")
-		return
-	}
-
-	token, err := util.GenerateToken(employee.ID, employee.Role, h.config.Server.JWTSecret)
-	if err != nil {
-		util.InternalError(c, "Token oluşturulamadı", err)
+		util.Unauthorized(c, err.Error())
 		return
 	}
 
 	c.JSON(http.StatusOK, LoginResponse{
 		Token: token,
-		Role:  employee.Role,
+		Role:  role,
 	})
+}
+
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordRequest
+	if err := h.utilBindJSON(c, &req); err != nil {
+		return
+	}
+
+	token, err := h.service.GenerateResetToken(req.Email)
+	if err != nil {
+		// We return OK even if user not found to avoid email enumeration
+		// but log the error for internal debugging
+		slog.Warn("Password reset requested for unknown/error email", "email", req.Email, "error", err)
+		c.JSON(http.StatusOK, gin.H{"message": "Talimatlar e-posta adresinize gönderildi (eğer kayıtlıysa)."})
+		return
+	}
+
+	// For dev/test: log to terminal as requested
+	slog.Info("PASSWORD RESET LINK (DEV)",
+		"email", req.Email,
+		"link", fmt.Sprintf("http://localhost:5173/reset-password?token=%s", token),
+	)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Talimatlar e-posta adresinize gönderildi."})
+}
+
+type ResetPasswordRequest struct {
+	Token    string `json:"token" binding:"required"`
+	Password string `json:"password" binding:"required,min=6"`
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+	if err := h.utilBindJSON(c, &req); err != nil {
+		return
+	}
+
+	if err := h.service.ResetPassword(req.Token, req.Password); err != nil {
+		util.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Şifreniz başarıyla güncellendi."})
+}
+
+// utilBindJSON is a helper to DRY bind/error handling
+func (h *AuthHandler) utilBindJSON(c *gin.Context, req interface{}) error {
+	if err := c.ShouldBindJSON(req); err != nil {
+		util.BadRequest(c, "Geçersiz veri", err)
+		return err
+	}
+	return nil
 }

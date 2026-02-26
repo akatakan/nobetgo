@@ -138,7 +138,9 @@ func main() {
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 
 	// Auth
-	authHandler := handlers.NewAuthHandler(employeeRepo, cfg)
+	resetTokenRepo := repositories.NewPasswordResetTokenRepository(db)
+	authService := services.NewAuthService(employeeRepo, resetTokenRepo, cfg.Server.JWTSecret)
+	authHandler := handlers.NewAuthHandler(authService)
 	loginRateLimiter := middleware.NewIPRateLimiter(1.0/60.0, 5) // 5 attempts per minute
 
 	// ===== Router =====
@@ -171,7 +173,12 @@ func main() {
 	api := router.Group("/api/v1")
 	{
 		// Public Auth
-		api.POST("/auth/login", middleware.RateLimit(loginRateLimiter), authHandler.Login)
+		auth := api.Group("/auth")
+		{
+			auth.POST("/login", middleware.RateLimit(loginRateLimiter), authHandler.Login)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
+		}
 
 		// Protected Routes
 		protected := api.Group("")

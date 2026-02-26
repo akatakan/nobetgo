@@ -193,10 +193,10 @@ const ScheduleViewer: React.FC = () => {
                     html += `<td class="${isWeekend ? 'weekend' : ''}">`;
                     html += `<div class="day-num">${day}</div>`;
                     schedules.forEach(s => {
-                        const name = `${s.Employee?.FirstName} ${s.Employee?.LastName}`;
+                        const name = s.Employee ? `${s.Employee.FirstName} ${s.Employee.LastName}` : '!!! BOŞ NÖBET !!!';
                         const shift = s.ShiftType?.Name || '';
                         const time = s.ShiftType ? `${s.ShiftType.StartTime}–${s.ShiftType.EndTime}` : '';
-                        html += `<div class="shift-entry"><span class="shift-name">${name}</span><br/><span class="shift-time">${shift} ${time}</span></div>`;
+                        html += `<div class="shift-entry" style="${!s.Employee ? 'border-left-color:red; background:#fff1f1;' : ''}"><span class="shift-name">${name}</span><br/><span class="shift-time">${shift} ${time}</span></div>`;
                     });
                     html += '</td>';
                 } else {
@@ -252,7 +252,7 @@ const ScheduleViewer: React.FC = () => {
                     const schedules = schedulesByDay[day] || [];
                     let cellText = `${day}`;
                     schedules.forEach(s => {
-                        const name = `${s.Employee?.FirstName} ${s.Employee?.LastName}`;
+                        const name = s.Employee ? `${s.Employee.FirstName} ${s.Employee.LastName}` : 'BOŞ NÖBET';
                         const shift = s.ShiftType?.Name || '';
                         const time = s.ShiftType ? `${s.ShiftType.StartTime}-${s.ShiftType.EndTime}` : '';
                         cellText += `\n${name}\n${shift} ${time}`;
@@ -458,18 +458,23 @@ const ScheduleViewer: React.FC = () => {
                                             </div>
                                             <div className="space-y-1">
                                                 {schedules.map((s) => {
+                                                    const isUnfilled = !s.EmployeeID || s.EmployeeID === 0 || !s.Employee;
                                                     const fScore = s.Employee?.FatigueScore || 0;
-                                                    const isExtremelyTired = fScore >= 50;
-                                                    const isTired = fScore >= 40 && fScore < 50;
+                                                    const isExtremelyTired = !isUnfilled && fScore >= 50;
+                                                    const isTired = !isUnfilled && fScore >= 40 && fScore < 50;
 
-                                                    // Heatmap bg overrides shift type color if tired
+                                                    // Heatmap bg overrides shift type color if tired/unfilled
                                                     let bgStatusColor = (s.ShiftType?.Color || '#3b82f6') + '25';
                                                     let borderStatusColor = s.ShiftType?.Color || '#3b82f6';
-                                                    if (isExtremelyTired) {
-                                                        bgStatusColor = 'rgba(239, 68, 68, 0.2)'; // Tailwind red-500
+
+                                                    if (isUnfilled) {
+                                                        bgStatusColor = 'rgba(239, 68, 68, 0.15)'; // Soft red
+                                                        borderStatusColor = '#ef4444'; // Solid red
+                                                    } else if (isExtremelyTired) {
+                                                        bgStatusColor = 'rgba(239, 68, 68, 0.2)';
                                                         borderStatusColor = '#ef4444';
                                                     } else if (isTired) {
-                                                        bgStatusColor = 'rgba(245, 158, 11, 0.2)'; // Tailwind amber-500
+                                                        bgStatusColor = 'rgba(245, 158, 11, 0.2)';
                                                         borderStatusColor = '#f59e0b';
                                                     }
 
@@ -480,15 +485,26 @@ const ScheduleViewer: React.FC = () => {
                                                             onDragStart={(e) => handleDragStart(e, s)}
                                                             onDragEnd={handleDragEnd}
                                                             onClick={() => handleEditSchedule(s)}
-                                                            className="text-[10px] px-1.5 py-0.5 rounded-md truncate cursor-pointer hover:scale-[1.02] hover:shadow-md active:cursor-grabbing transition-all group/item relative flex items-center justify-between"
+                                                            className={`text-[10px] px-1.5 py-0.5 rounded-md truncate cursor-pointer hover:scale-[1.02] hover:shadow-md active:cursor-grabbing transition-all group/item relative flex items-center justify-between
+                                                                ${isUnfilled ? 'border-dashed border-[1px] animate-pulse' : ''}`}
                                                             style={{
                                                                 backgroundColor: bgStatusColor,
                                                                 color: borderStatusColor,
-                                                                borderLeft: `2px solid ${borderStatusColor}`,
+                                                                borderLeft: isUnfilled ? undefined : `2px solid ${borderStatusColor}`,
+                                                                borderColor: isUnfilled ? borderStatusColor : undefined
                                                             }}
-                                                            title={`${s.Employee?.FirstName} ${s.Employee?.LastName} — ${s.ShiftType?.Name}`}
+                                                            title={isUnfilled ? `ATANMAMIŞ NÖBET: ${s.ShiftType?.Name}` : `${s.Employee?.FirstName} ${s.Employee?.LastName} — ${s.ShiftType?.Name}`}
                                                         >
-                                                            <span className="truncate">{s.Employee?.FirstName} {s.Employee?.LastName}</span>
+                                                            <span className="truncate flex items-center gap-1">
+                                                                {isUnfilled ? (
+                                                                    <>
+                                                                        <AlertCircle className="w-2.5 h-2.5" />
+                                                                        <span className="font-bold">BOŞ NÖBET</span>
+                                                                    </>
+                                                                ) : (
+                                                                    `${s.Employee?.FirstName} ${s.Employee?.LastName}`
+                                                                )}
+                                                            </span>
                                                             {(isTired || isExtremelyTired) && (
                                                                 <div
                                                                     className="group/tooltip relative ml-1"
