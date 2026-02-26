@@ -6,6 +6,7 @@ import (
 
 	"github.com/akatakan/nobetgo/internal/core"
 	"github.com/akatakan/nobetgo/internal/services"
+	"github.com/akatakan/nobetgo/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,7 +26,7 @@ func (h *ShiftTypeHandler) CreateShiftType(c *gin.Context) {
 	}
 
 	if err := h.service.CreateShiftType(&shiftType); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Çalışma tipi oluşturulamadı", err)
 		return
 	}
 
@@ -35,13 +36,13 @@ func (h *ShiftTypeHandler) CreateShiftType(c *gin.Context) {
 func (h *ShiftTypeHandler) GetShiftType(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		util.BadRequest(c, "Geçersiz ID", err)
 		return
 	}
 
 	shiftType, err := h.service.GetShiftTypeByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ShiftType not found"})
+		util.JSONError(c, http.StatusNotFound, "Çalışma tipi bulunamadı", err)
 		return
 	}
 
@@ -51,7 +52,7 @@ func (h *ShiftTypeHandler) GetShiftType(c *gin.Context) {
 func (h *ShiftTypeHandler) GetAllShiftTypes(c *gin.Context) {
 	shiftTypes, err := h.service.GetAllShiftTypes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Çalışma tipleri getirilemedi", err)
 		return
 	}
 
@@ -61,7 +62,7 @@ func (h *ShiftTypeHandler) GetAllShiftTypes(c *gin.Context) {
 func (h *ShiftTypeHandler) UpdateShiftType(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		util.BadRequest(c, "Geçersiz ID", err)
 		return
 	}
 
@@ -74,7 +75,7 @@ func (h *ShiftTypeHandler) UpdateShiftType(c *gin.Context) {
 	shiftType.ID = uint(id)
 
 	if err := h.service.UpdateShiftType(&shiftType); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Güncelleme başarısız", err)
 		return
 	}
 
@@ -84,12 +85,12 @@ func (h *ShiftTypeHandler) UpdateShiftType(c *gin.Context) {
 func (h *ShiftTypeHandler) DeleteShiftType(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		util.BadRequest(c, "Geçersiz ID", err)
 		return
 	}
 
 	if err := h.service.DeleteShiftType(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Silme işlemi başarısız", err)
 		return
 	}
 

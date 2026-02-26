@@ -60,3 +60,44 @@ func (c *WeeklyHourLimit) CalculatePenalty(schedule []core.Schedule, employee co
 
 	return 0, false
 }
+
+// AnnualLeaveOverlapConstraint ensures an employee is not assigned a shift while on leave
+type AnnualLeaveOverlapConstraint struct {
+	ApprovedLeaves []core.Leave
+}
+
+func (c *AnnualLeaveOverlapConstraint) CalculatePenalty(schedule []core.Schedule, employee core.Employee, date time.Time, shift core.ShiftType) (float64, bool) {
+	for _, l := range c.ApprovedLeaves {
+		if l.EmployeeID == employee.ID && l.Status == "approved" {
+			// Normalize to UTC date start for comparison
+			check := date.UTC().Truncate(24 * time.Hour)
+			start := l.StartDate.UTC().Truncate(24 * time.Hour)
+			end := l.EndDate.UTC().Truncate(24 * time.Hour)
+
+			if (check.Equal(start) || check.After(start)) && (check.Equal(end) || check.Before(end)) {
+				return 5000.0, true // Hard constraint violation
+			}
+		}
+	}
+	return 0, false
+}
+
+// MinimumRestConstraint ensures at least X hours of rest between shifts
+type MinimumRestConstraint struct {
+	MinRestHours float64
+}
+
+func (c *MinimumRestConstraint) CalculatePenalty(schedule []core.Schedule, employee core.Employee, date time.Time, shift core.ShiftType) (float64, bool) {
+	for _, s := range schedule {
+		if s.EmployeeID == employee.ID {
+			diff := s.Date.Sub(date).Hours()
+			if diff < 0 {
+				diff = -diff
+			}
+			if diff > 0 && diff < c.MinRestHours {
+				return 1000.0, true // Hard constraint
+			}
+		}
+	}
+	return 0, false
+}

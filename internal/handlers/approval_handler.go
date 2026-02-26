@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/akatakan/nobetgo/internal/services"
+	"github.com/akatakan/nobetgo/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,7 +22,7 @@ func NewApprovalHandler(service *services.ApprovalService) *ApprovalHandler {
 func (h *ApprovalHandler) GetPendingApprovals(c *gin.Context) {
 	pending, err := h.service.GetPendingApprovals()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Bekleyen onaylar getirilemedi", err)
 		return
 	}
 
@@ -39,13 +40,13 @@ func (h *ApprovalHandler) ApproveTimeEntry(c *gin.Context) {
 		ApproverID uint `json:"approver_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 
 	entry, err := h.service.ApproveTimeEntry(id, body.ApproverID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Giriş onaylanamadı", err)
 		return
 	}
 
@@ -63,13 +64,13 @@ func (h *ApprovalHandler) RejectTimeEntry(c *gin.Context) {
 		ApproverID uint `json:"approver_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 
 	entry, err := h.service.RejectTimeEntry(id, body.ApproverID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Giriş reddedilemedi", err)
 		return
 	}
 
@@ -81,7 +82,7 @@ func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 	entityType := c.Query("entity_type")
 	entityID, err := parseUintParam(c, "entity_id")
 	if entityType == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "entity_type gerekli"})
+		util.BadRequest(c, "entity_type gerekli", nil)
 		return
 	}
 
@@ -89,12 +90,12 @@ func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 	if err != nil {
 		start, end, err := parseDateRange(c)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			util.BadRequest(c, "Tarih aralığı geçersiz", err)
 			return
 		}
 		logs, err := h.service.GetAuditLogsByDateRange(start, end)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			util.InternalError(c, "Denetim günlükleri getirilemedi", err)
 			return
 		}
 		c.JSON(http.StatusOK, logs)
@@ -103,7 +104,7 @@ func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 
 	logs, err2 := h.service.GetAuditLogs(entityType, entityID)
 	if err2 != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err2.Error()})
+		util.InternalError(c, "Denetim günlükleri getirilemedi", err2)
 		return
 	}
 

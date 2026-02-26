@@ -17,9 +17,10 @@ type LogConfig struct {
 }
 
 type ServerConfig struct {
-	Port string `mapstructure:"port"`
-	Host string `mapstructure:"host"`
-	Mode string `mapstructure:"mode"` // debug, release, test
+	Port      string `mapstructure:"port"`
+	Host      string `mapstructure:"host"`
+	Mode      string `mapstructure:"mode"` // debug, release, test
+	JWTSecret string `mapstructure:"jwt_secret"`
 }
 
 type DatabaseConfig struct {

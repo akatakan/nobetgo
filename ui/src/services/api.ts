@@ -7,7 +7,7 @@ import type {
     OvertimeRule, PublicHoliday, OvertimeSummary,
     PendingApprovals, AuditLog,
     WorkHoursReport, AbsenceReport, EmployeeSummaryReport, TrendData,
-    CostAnalysisReport, Notification
+    CostAnalysisReport, Notification, AuthResponse, PaginationParams, PaginationResult
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8081/api/v1';
@@ -18,6 +18,34 @@ const api = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+// Auth interceptor
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
+
+// Standard Error format handler
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            // We can't easily redirect from here without a router or window hack
+            // window.location.href = '/login'; 
+        }
+        return Promise.reject(error);
+    }
+);
+
+export const authApi = {
+    login: (data: any) => api.post<AuthResponse>('/auth/login', data),
+};
 
 export const departmentApi = {
     list: () => api.get<Department[]>('/departments'),
@@ -36,7 +64,7 @@ export const titleApi = {
 };
 
 export const employeeApi = {
-    list: () => api.get<Employee[]>('/employees'),
+    list: (params?: PaginationParams) => api.get<PaginationResult<Employee>>('/employees', { params }),
     getById: (id: number) => api.get<Employee>(`/employees/${id}`),
     create: (data: EmployeeFormData) => api.post<Employee>('/employees', data),
     update: (id: number, data: Partial<EmployeeFormData>) => api.put<Employee>(`/employees/${id}`, data),

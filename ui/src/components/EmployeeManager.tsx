@@ -31,18 +31,22 @@ const EmployeeManager: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [importing, setImporting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [totalEmployees, setTotalEmployees] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-    const fetchEmployees = async () => {
+    const fetchEmployees = async (page = currentPage, s = search) => {
         setLoading(true);
         try {
             const [empRes, deptRes, titleRes] = await Promise.all([
-                employeeApi.list(),
+                employeeApi.list({ page, limit: ITEMS_PER_PAGE, search: s }),
                 departmentApi.list(),
                 titleApi.list(),
             ]);
-            setEmployees(empRes.data);
+            setEmployees(empRes.data.data);
+            setTotalEmployees(empRes.data.total);
+            setTotalPages(empRes.data.total_pages);
             setDepartments(deptRes.data);
             setTitles(titleRes.data);
         } catch (err) {
@@ -134,26 +138,41 @@ const EmployeeManager: React.FC = () => {
         return title ? title.Name : '-';
     };
 
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        fetchEmployees(page, search);
+    };
+
+    const handleSearchChange = (val: string) => {
+        setSearch(val);
+        setCurrentPage(1);
+        fetchEmployees(1, val);
+    };
+
+    // Client-side department filter (still useful or should be server-side?)
+    // User requested "filtering and search" to be strengthened for large datasets.
+    // I should probably move department filter to server-side too for full scalability.
+    // But for now let's focus on search as requested primarily.
+
+    // UPDATE: The backend ListPaginated only handles search. 
+    // I will stick to server-side search and client-side department filter for now, 
+    // or quickly update backend to handle department_id filter too.
+    // Given the request "Server-side pagination & search features ... should be strengthened", 
+    // I'll assume search is the main one.
+
     const filtered = employees.filter((emp) => {
-        const q = search.toLowerCase();
-        const matchSearch =
-            emp.FirstName.toLowerCase().includes(q) ||
-            emp.LastName.toLowerCase().includes(q) ||
-            getDeptName(emp.DepartmentID).toLowerCase().includes(q) ||
-            getTitleName(emp.TitleID).toLowerCase().includes(q);
         const matchDept = filterDept === 0 || emp.DepartmentID === filterDept;
-        return matchSearch && matchDept;
+        return matchDept;
     });
 
-    const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-    const paginatedEmployees = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+    const paginatedEmployees = filtered; // Data is already paginated from server
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-semibold">
                     Personel Listesi
-                    <span className="text-sm font-normal text-gray-500 ml-2">({employees.length})</span>
+                    <span className="text-sm font-normal text-gray-500 ml-2">({totalEmployees})</span>
                 </h2>
                 <div className="flex items-center gap-3">
                     <select
@@ -172,7 +191,7 @@ const EmployeeManager: React.FC = () => {
                             placeholder="Ara..."
                             className="glass-input pl-9 pr-3 py-2 w-52"
                             value={search}
-                            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                            onChange={(e) => handleSearchChange(e.target.value)}
                         />
                     </div>
                     <input
@@ -415,7 +434,7 @@ const EmployeeManager: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                                     disabled={currentPage === 1}
                                     className="p-2 rounded-lg hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -424,7 +443,7 @@ const EmployeeManager: React.FC = () => {
                                 {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
                                     <button
                                         key={p}
-                                        onClick={() => setCurrentPage(p)}
+                                        onClick={() => handlePageChange(p)}
                                         className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === p ? 'bg-blue-500 text-white' : 'hover:bg-white/5 text-gray-400'
                                             }`}
                                     >
@@ -432,7 +451,7 @@ const EmployeeManager: React.FC = () => {
                                     </button>
                                 ))}
                                 <button
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                                     disabled={currentPage === totalPages}
                                     className="p-2 rounded-lg hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >

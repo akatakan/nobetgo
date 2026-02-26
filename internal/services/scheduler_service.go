@@ -2,8 +2,10 @@ package services
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/akatakan/nobetgo/internal/core"
+	"github.com/akatakan/nobetgo/internal/repositories"
 	"github.com/akatakan/nobetgo/internal/services/scheduler"
 )
 
@@ -20,13 +22,15 @@ type SchedulerService struct {
 	repo         ScheduleRepositoryInterface
 	employeeRepo EmployeeRepositoryInterface
 	shiftRepo    ShiftTypeRepositoryInterface
+	leaveRepo    repositories.LeaveRepositoryInterface
 }
 
-func NewSchedulerService(repo ScheduleRepositoryInterface, empRepo EmployeeRepositoryInterface, shiftRepo ShiftTypeRepositoryInterface) *SchedulerService {
+func NewSchedulerService(repo ScheduleRepositoryInterface, empRepo EmployeeRepositoryInterface, shiftRepo ShiftTypeRepositoryInterface, leaveRepo repositories.LeaveRepositoryInterface) *SchedulerService {
 	return &SchedulerService{
 		repo:         repo,
 		employeeRepo: empRepo,
 		shiftRepo:    shiftRepo,
+		leaveRepo:    leaveRepo,
 	}
 }
 
@@ -104,9 +108,23 @@ func (s *SchedulerService) GenerateSchedule(req core.ScheduleRequest) ([]core.Sc
 		threshold = 45.0
 	}
 
+	// Fetch approved leaves for the given range to support LeaveOverlapConstraint
+	start := time.Date(req.Year, time.Month(req.Month), 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, 0)
+	var leaves []core.Leave
+	if req.DepartmentID > 0 {
+		leaves, _ = s.leaveRepo.ListByDepartment(req.DepartmentID, start, end)
+	} else {
+		// If no department, we'd need to fetch all or per employee, but ListByDepartment handles it if dept is specific
+		// For now, let's just use what we have or add a ListByStatus to repository if needed.
+		leaves, _ = s.leaveRepo.ListByStatus("approved")
+	}
+
 	constraints := []scheduler.Constraint{
 		&scheduler.NoConsecutiveShifts{},
 		&scheduler.WeeklyHourLimit{LimitHours: threshold},
+		&scheduler.AnnualLeaveOverlapConstraint{ApprovedLeaves: leaves},
+		&scheduler.MinimumRestConstraint{MinRestHours: 24},
 	}
 
 	optimizer := scheduler.NewOptimizer(constraints)

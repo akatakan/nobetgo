@@ -18,4 +18,6 @@ type Employee struct {
 	Competencies  string     `gorm:"type:text" json:"Competencies"` // Stored as comma-separated string or JSON string to keep it DB agnostic (SQLite/Postgres)
 	FatigueScore  int        `gorm:"default:0" json:"FatigueScore"`
 	HeroPoint     int        `gorm:"default:0" json:"HeroPoint"`
+	PasswordHash  string     `gorm:"type:varchar(255)" json:"-"`
+	Role          string     `gorm:"type:varchar(20);default:'user'" json:"Role"` // admin or user
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/akatakan/nobetgo/internal/core"
 	"github.com/akatakan/nobetgo/internal/services"
+	"github.com/akatakan/nobetgo/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,13 +27,13 @@ func NewLeaveHandler(service *services.LeaveService) *LeaveHandler {
 func (h *LeaveHandler) RequestLeave(c *gin.Context) {
 	var req core.LeaveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 
 	leave, err := h.service.RequestLeave(req)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		util.JSONError(c, http.StatusConflict, "İzin talebi çakışıyor", err)
 		return
 	}
 
@@ -48,7 +49,7 @@ func (h *LeaveHandler) GetLeave(c *gin.Context) {
 
 	leave, err := h.service.GetLeave(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		util.JSONError(c, http.StatusNotFound, "İzin bulunamadı", err)
 		return
 	}
 
@@ -65,12 +66,12 @@ func (h *LeaveHandler) ListLeaves(c *gin.Context) {
 		var err error
 		start, err = time.Parse("2006-01-02", startStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz start tarihi"})
+			util.BadRequest(c, "Geçersiz start tarihi", err)
 			return
 		}
 		end, err = time.Parse("2006-01-02", endStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz end tarihi"})
+			util.BadRequest(c, "Geçersiz end tarihi", err)
 			return
 		}
 	} else {
@@ -83,7 +84,7 @@ func (h *LeaveHandler) ListLeaves(c *gin.Context) {
 		empID, _ := strconv.ParseUint(empIDStr, 10, 32)
 		leaves, err := h.service.GetEmployeeLeaves(uint(empID), start, end)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			util.InternalError(c, "Çalışan izinleri getirilemedi", err)
 			return
 		}
 		c.JSON(http.StatusOK, leaves)
@@ -94,7 +95,7 @@ func (h *LeaveHandler) ListLeaves(c *gin.Context) {
 		deptID, _ := strconv.ParseUint(deptIDStr, 10, 32)
 		leaves, err := h.service.GetDepartmentLeaves(uint(deptID), start, end)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			util.InternalError(c, "Bölüm izinleri getirilemedi", err)
 			return
 		}
 		c.JSON(http.StatusOK, leaves)
@@ -104,7 +105,7 @@ func (h *LeaveHandler) ListLeaves(c *gin.Context) {
 	// Default: pending leaves
 	leaves, err := h.service.GetPendingLeaves()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Bekleyen izinler getirilemedi", err)
 		return
 	}
 	c.JSON(http.StatusOK, leaves)
@@ -122,13 +123,13 @@ func (h *LeaveHandler) ApproveLeave(c *gin.Context) {
 		ApproverID uint `json:"approver_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 
 	leave, err := h.service.ApproveLeave(id, body.ApproverID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "İzin onaylanamadı", err)
 		return
 	}
 
@@ -146,13 +147,13 @@ func (h *LeaveHandler) RejectLeave(c *gin.Context) {
 		ApproverID uint `json:"approver_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 
 	leave, err := h.service.RejectLeave(id, body.ApproverID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "İzin reddedilemedi", err)
 		return
 	}
 
@@ -165,7 +166,7 @@ func (h *LeaveHandler) GetLeaveBalance(c *gin.Context) {
 	yearStr := c.DefaultQuery("year", strconv.Itoa(time.Now().Year()))
 
 	if empIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "employee_id gerekli"})
+		util.BadRequest(c, "employee_id gerekli", nil)
 		return
 	}
 
@@ -174,7 +175,7 @@ func (h *LeaveHandler) GetLeaveBalance(c *gin.Context) {
 
 	balances, err := h.service.GetLeaveBalance(uint(empID), year)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Bakiye getirilemedi", err)
 		return
 	}
 
@@ -187,12 +188,12 @@ func (h *LeaveHandler) GetLeaveBalance(c *gin.Context) {
 func (h *LeaveHandler) CreateLeaveType(c *gin.Context) {
 	var lt core.LeaveType
 	if err := c.ShouldBindJSON(&lt); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 
 	if err := h.service.CreateLeaveType(&lt); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "İzin türü oluşturulamadı", err)
 		return
 	}
 
@@ -203,7 +204,7 @@ func (h *LeaveHandler) CreateLeaveType(c *gin.Context) {
 func (h *LeaveHandler) GetAllLeaveTypes(c *gin.Context) {
 	types, err := h.service.GetAllLeaveTypes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "İzin türleri getirilemedi", err)
 		return
 	}
 	c.JSON(http.StatusOK, types)
@@ -218,7 +219,7 @@ func (h *LeaveHandler) GetLeaveType(c *gin.Context) {
 
 	lt, err := h.service.GetLeaveType(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		util.JSONError(c, http.StatusNotFound, "İzin türü bulunamadı", err)
 		return
 	}
 
@@ -234,13 +235,13 @@ func (h *LeaveHandler) UpdateLeaveType(c *gin.Context) {
 
 	var lt core.LeaveType
 	if err := c.ShouldBindJSON(&lt); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		util.BadRequest(c, "Geçersiz veri", err)
 		return
 	}
 	lt.ID = id
 
 	if err := h.service.UpdateLeaveType(&lt); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Güncelleme başarısız", err)
 		return
 	}
 
@@ -255,7 +256,7 @@ func (h *LeaveHandler) DeleteLeaveType(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteLeaveType(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		util.InternalError(c, "Silme işlemi başarısız", err)
 		return
 	}
 

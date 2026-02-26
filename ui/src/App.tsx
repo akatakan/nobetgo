@@ -11,8 +11,10 @@ import LeaveManager from './components/LeaveManager';
 import ApprovalManager from './components/ApprovalManager';
 import ReportingDashboard from './components/ReportingDashboard';
 import TitleManager from './components/TitleManager';
+import Login from './components/Login';
 import { NotificationBell } from './components/NotificationBell';
 import { employeeApi, shiftTypeApi, scheduleApi, departmentApi } from './services/api';
+import { LogOut } from 'lucide-react';
 import './App.css';
 
 // Dynamic Dashboard
@@ -161,6 +163,24 @@ const SUBTITLES: Record<string, string> = {
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [role, setRole] = useState<string | null>(localStorage.getItem('role'));
+
+  const handleLoginSuccess = (token: string, role: string) => {
+    setToken(token);
+    setRole(role);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    setToken(null);
+    setRole(null);
+  };
+
+  if (!token) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
 
   const navItems = [
     { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
@@ -175,7 +195,13 @@ const App: React.FC = () => {
     { id: 'approvals', icon: ShieldCheck, label: 'Onaylar' },
     { id: 'reports', icon: FileBarChart, label: 'Raporlar' },
     { id: 'settings', icon: Settings, label: 'Ayarlar' },
-  ];
+  ].filter(item => {
+    // Only admins see management tabs
+    if (role !== 'admin') {
+      return !['scheduler', 'approvals', 'settings', 'departments', 'shifts'].includes(item.id);
+    }
+    return true;
+  });
 
   return (
     <div className="flex h-screen w-screen bg-[var(--bg-primary)] text-white overflow-hidden">
@@ -216,8 +242,15 @@ const App: React.FC = () => {
 
         {/* Bottom */}
         <div className="p-4 border-t border-white/[0.04]">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-all text-sm font-medium mb-2"
+          >
+            <LogOut className="w-[18px] h-[18px]" />
+            Güvenli Çıkış
+          </button>
           <div className="text-xs text-gray-600 text-center">
-            NöbetGo v0.3.0
+            NöbetGo v0.3.1
           </div>
         </div>
       </aside>
@@ -235,7 +268,10 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
             <NotificationBell />
-            {/* User Profile area could go here later */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-xs font-medium text-gray-300 uppercase tracking-wider">{role}</span>
+            </div>
           </div>
         </header>
 

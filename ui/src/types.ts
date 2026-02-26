@@ -32,6 +32,26 @@ export interface Employee extends BaseModel {
   Competencies?: string;
   FatigueScore?: number;
   HeroPoint?: number;
+  Role?: 'admin' | 'user';
+}
+
+export interface AuthResponse {
+  token: string;
+  role: string;
+}
+
+export interface PaginationParams {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
+export interface PaginationResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 export interface ShiftType extends BaseModel {

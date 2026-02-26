@@ -18,6 +18,18 @@ func NewOptimizer(constraints []Constraint) *Optimizer {
 	}
 }
 
+func (o *Optimizer) checkConstraints(schedule []core.Schedule, employee core.Employee, date time.Time, shift core.ShiftType) (float64, bool) {
+	totalPenalty := 0.0
+	for _, c := range o.Constraints {
+		penalty, isHard := c.CalculatePenalty(schedule, employee, date, shift)
+		if isHard {
+			return 0, true
+		}
+		totalPenalty += penalty
+	}
+	return totalPenalty, false
+}
+
 // OptimizeSchedule generates an optimized schedule using round-robin fair distribution
 // with hard constraint enforcement (no consecutive shifts, balanced workload).
 func (o *Optimizer) OptimizeSchedule(req core.ScheduleRequest, department *core.Department, employees []core.Employee, shiftTypes []core.ShiftType) []core.Schedule {
@@ -122,14 +134,12 @@ func (o *Optimizer) generateFairSchedule(req core.ScheduleRequest, department *c
 					continue
 				}
 
-				// Check consecutive constraint: employee must not have worked the previous day
-				if last, ok := lastWorkDay[emp.ID]; ok {
-					diff := sl.date.Sub(last).Hours()
-					// We only enforce 24h rest rule if diff > 0 (it's not the same day slot)
-					if diff > 0 && diff <= 24 {
-						continue
-					}
+				// Use generic constraint checker
+				penalty, isHard := o.checkConstraints(schedule, emp, sl.date, sl.shiftType)
+				if isHard {
+					continue
 				}
+				totalPenalty += penalty
 
 				// Valid assignment
 				s := core.Schedule{
@@ -287,13 +297,12 @@ func (o *Optimizer) generateFatigueAwareSchedule(req core.ScheduleRequest, depar
 					continue
 				}
 
-				// Hard Rest Constraint: 24 hours between shifts
-				if last, ok := lastWorkDay[emp.ID]; ok {
-					diffHours := sl.date.Sub(last).Hours()
-					if diffHours > 0 && diffHours <= 24 {
-						continue
-					}
+				// Use generic constraint checker
+				penalty, isHard := o.checkConstraints(schedule, emp, sl.date, sl.shiftType)
+				if isHard {
+					continue
 				}
+				totalPenalty += penalty
 
 				// Hard Fatigue Constraint: > 50 means burnout risk
 				diff := 1

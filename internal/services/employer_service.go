@@ -15,6 +15,7 @@ type EmployeeRepositoryInterface interface {
 	GetByID(id uint) (*core.Employee, error)
 	List() ([]core.Employee, error)
 	ListByDepartment(departmentID uint) ([]core.Employee, error)
+	ListPaginated(params core.PaginationParams) ([]core.Employee, int64, error)
 	Update(employee *core.Employee) error
 	Delete(id uint) error
 	GetDB() *gorm.DB
@@ -44,6 +45,33 @@ func (s *EmployeeService) GetEmployeeByID(id uint) (*core.Employee, error) {
 
 func (s *EmployeeService) GetAllEmployees() ([]core.Employee, error) {
 	return s.repo.List()
+}
+
+func (s *EmployeeService) GetPaginatedEmployees(params core.PaginationParams) (*core.PaginationResult, error) {
+	if params.Page <= 0 {
+		params.Page = 1
+	}
+	if params.Limit <= 0 {
+		params.Limit = 10
+	}
+
+	employees, total, err := s.repo.ListPaginated(params)
+	if err != nil {
+		return nil, err
+	}
+
+	totalPages := 0
+	if params.Limit > 0 {
+		totalPages = int((total + int64(params.Limit) - 1) / int64(params.Limit))
+	}
+
+	return &core.PaginationResult{
+		Data:       employees,
+		Total:      total,
+		Page:       params.Page,
+		Limit:      params.Limit,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (s *EmployeeService) UpdateEmployee(employee *core.Employee) error {
