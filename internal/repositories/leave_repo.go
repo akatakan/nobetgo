@@ -186,8 +186,11 @@ func (r *LeaveRepository) ListPaginated(params core.PaginationParams, employeeID
 
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
-		db = db.Joins("LEFT JOIN employees ON employees.id = leaves.employee_id").
-			Where("employees.first_name LIKE ? OR employees.last_name LIKE ?", search, search)
+		if departmentID == 0 {
+			// Only join if not already joined by department filter
+			db = db.Joins("LEFT JOIN employees ON employees.id = leaves.employee_id")
+		}
+		db = db.Where("employees.first_name ILIKE ? OR employees.last_name ILIKE ?", search, search)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

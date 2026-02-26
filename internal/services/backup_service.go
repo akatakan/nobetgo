@@ -27,11 +27,6 @@ func (s *BackupService) CreateBackup() (string, error) {
 	filePath := filepath.Join(tempDir, fileName)
 
 	// Prepare pg_dump command
-	// For Windows, help pg_dump find its way by assuming it might be in PATH
-	// Environment variable for password to avoid interactive prompt
-	os.Setenv("PGPASSWORD", s.cfg.Password)
-	defer os.Unsetenv("PGPASSWORD")
-
 	cmd := exec.Command("pg_dump",
 		"-h", s.cfg.Host,
 		"-p", s.cfg.Port,
@@ -41,6 +36,8 @@ func (s *BackupService) CreateBackup() (string, error) {
 		"--no-owner",
 		"--no-privileges",
 	)
+	// Pass PGPASSWORD via subprocess environment (thread-safe)
+	cmd.Env = append(os.Environ(), "PGPASSWORD="+s.cfg.Password)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

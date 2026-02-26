@@ -91,16 +91,14 @@ func (h *LeaveHandler) ApproveLeave(c *gin.Context) {
 		return
 	}
 
-	// In a real system, approverID comes from auth context
-	var body struct {
-		ApproverID uint `json:"approver_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+	// Get approver ID from authenticated JWT context
+	approverID, exists := c.Get("userID")
+	if !exists {
+		util.Unauthorized(c, "Oturum geçersiz")
 		return
 	}
 
-	leave, err := h.service.ApproveLeave(id, body.ApproverID)
+	leave, err := h.service.ApproveLeave(id, approverID.(uint))
 	if err != nil {
 		util.InternalError(c, "İzin onaylanamadı", err)
 		return
@@ -116,15 +114,14 @@ func (h *LeaveHandler) RejectLeave(c *gin.Context) {
 		return
 	}
 
-	var body struct {
-		ApproverID uint `json:"approver_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+	// Get approver ID from authenticated JWT context
+	approverID, exists := c.Get("userID")
+	if !exists {
+		util.Unauthorized(c, "Oturum geçersiz")
 		return
 	}
 
-	leave, err := h.service.RejectLeave(id, body.ApproverID)
+	leave, err := h.service.RejectLeave(id, approverID.(uint))
 	if err != nil {
 		util.InternalError(c, "İzin reddedilemedi", err)
 		return

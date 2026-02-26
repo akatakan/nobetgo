@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -26,6 +27,10 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 
 		tokenString := parts[1]
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Validate the signing algorithm to prevent "alg:none" bypass
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return []byte(secret), nil
 		})
 
@@ -40,9 +45,17 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 			return
 		}
 
-		// Set user info to context
-		c.Set("user_id", uint(claims["user_id"].(float64)))
-		c.Set("role", claims["role"].(string))
+		// Safe type assertions to prevent panics from malformed tokens
+		userIDVal, ok1 := claims["user_id"].(float64)
+		roleVal, ok2 := claims["role"].(string)
+		if !ok1 || !ok2 {
+			util.JSONError(c, http.StatusUnauthorized, "Invalid token claims", nil)
+			return
+		}
+
+		// Set user info to context (key "userID" matches handler expectations)
+		c.Set("userID", uint(userIDVal))
+		c.Set("role", roleVal)
 
 		c.Next()
 	}

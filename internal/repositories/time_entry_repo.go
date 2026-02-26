@@ -123,7 +123,7 @@ func (r *TimeEntryRepository) ListPaginated(params core.PaginationParams, employ
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
 		db = db.Joins("LEFT JOIN employees e ON e.id = time_entries.employee_id").
-			Where("e.first_name LIKE ? OR e.last_name LIKE ?", search, search)
+			Where("e.first_name ILIKE ? OR e.last_name ILIKE ?", search, search)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

@@ -1,6 +1,8 @@
 package util
 
 import (
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,8 +31,12 @@ func BadRequest(c *gin.Context, message string, err error) {
 }
 
 // InternalError sends a 500 Internal Server Error response
+// Internal error details are logged server-side but NOT exposed to the client
 func InternalError(c *gin.Context, message string, err error) {
-	JSONError(c, 500, message, err)
+	if err != nil {
+		slog.Error(message, "error", err, "path", c.Request.URL.Path)
+	}
+	JSONError(c, 500, message, nil)
 }
 
 // Unauthorized sends a 401 Unauthorized response

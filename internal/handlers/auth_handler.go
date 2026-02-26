@@ -65,8 +65,8 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// For dev/test: log to terminal as requested
-	slog.Info("PASSWORD RESET LINK (DEV)",
+	// For dev/test only: log at Debug level (invisible in production info/warn/error levels)
+	slog.Debug("PASSWORD RESET LINK (DEV)",
 		"email", req.Email,
 		"link", fmt.Sprintf("http://localhost:5173/reset-password?token=%s", token),
 	)

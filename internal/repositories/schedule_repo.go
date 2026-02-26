@@ -83,7 +83,7 @@ func (r *ScheduleRepository) ListPaginated(params core.PaginationParams, month, 
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
 		db = db.Joins("LEFT JOIN employees ON employees.id = schedules.employee_id").
-			Where("employees.first_name LIKE ? OR employees.last_name LIKE ?", search, search)
+			Where("employees.first_name ILIKE ? OR employees.last_name ILIKE ?", search, search)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

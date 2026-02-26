@@ -67,7 +67,7 @@ func (r *EmployeeRepository) ListPaginated(params core.PaginationParams) ([]core
 
 	if params.Search != "" {
 		search := "%" + params.Search + "%"
-		db = db.Where("first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR username LIKE ?", search, search, search, search)
+		db = db.Where("first_name ILIKE ? OR last_name ILIKE ? OR email ILIKE ? OR username ILIKE ?", search, search, search, search)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

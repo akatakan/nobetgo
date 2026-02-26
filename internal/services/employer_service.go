@@ -54,6 +54,9 @@ func (s *EmployeeService) GetPaginatedEmployees(params core.PaginationParams) (*
 	if params.Limit <= 0 {
 		params.Limit = 10
 	}
+	if params.Limit > 100 {
+		params.Limit = 100
+	}
 
 	employees, total, err := s.repo.ListPaginated(params)
 	if err != nil {

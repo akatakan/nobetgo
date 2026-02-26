@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/akatakan/nobetgo/config"
 	"gorm.io/driver/postgres"
@@ -24,6 +24,6 @@ func NewPostgresDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	log.Println("Connected to database successfully")
+	slog.Info("Connected to database successfully")
 	return db, nil
 }

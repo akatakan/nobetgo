@@ -88,7 +88,11 @@ func main() {
 		}
 
 		// 3. Create Admin
-		hashedPassword, _ := util.HashPassword("admin")
+		hashedPassword, hashErr := util.HashPassword("admin")
+		if hashErr != nil {
+			slog.Error("Cannot hash admin password", "error", hashErr)
+			os.Exit(1)
+		}
 		admin := core.Employee{
 			FirstName:    "Sistem",
 			LastName:     "Yöneticisi",
@@ -195,9 +199,16 @@ func main() {
 	router.Use(logger.GinLoggerMiddleware())
 	router.Use(gin.Recovery())
 
-	// CORS Middleware
+	// CORS Middleware — restrict to known origins
+	allowedOrigins := map[string]bool{
+		"http://localhost:5173": true,
+		"http://localhost:3000": true,
+	}
 	router.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.GetHeader("Origin")
+		if allowedOrigins[origin] {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 		if c.Request.Method == "OPTIONS" {
@@ -286,11 +297,11 @@ func main() {
 			{
 				timeEntries.POST("/clock-in", timeEntryHandler.ClockIn)
 				timeEntries.POST("/clock-out", timeEntryHandler.ClockOut)
-				timeEntries.POST("", timeEntryHandler.CreateTimeEntry)
+				timeEntries.POST("", middleware.RoleMiddleware("admin"), timeEntryHandler.CreateTimeEntry)
 				timeEntries.GET("", timeEntryHandler.ListTimeEntries)
 				timeEntries.GET("/:id", timeEntryHandler.GetTimeEntry)
-				timeEntries.PUT("/:id", timeEntryHandler.UpdateTimeEntry)
-				timeEntries.DELETE("/:id", timeEntryHandler.DeleteTimeEntry)
+				timeEntries.PUT("/:id", middleware.RoleMiddleware("admin"), timeEntryHandler.UpdateTimeEntry)
+				timeEntries.DELETE("/:id", middleware.RoleMiddleware("admin"), timeEntryHandler.DeleteTimeEntry)
 			}
 
 			// Leave (İzin Yönetimi)
