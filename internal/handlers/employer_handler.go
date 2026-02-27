@@ -59,7 +59,7 @@ func (h *EmployeeHandler) GetAllEmployees(c *gin.Context) {
 	// but for standard table view, pagination is better.
 	// Let's assume the UI will always send at least defaults.
 
-	result, err := h.service.GetPaginatedEmployees(params)
+	result, err := h.service.GetPaginatedEmployees(c.Request.Context(), params)
 	if err != nil {
 		util.InternalError(c, "Çalışanlar getirilemedi", err)
 		return

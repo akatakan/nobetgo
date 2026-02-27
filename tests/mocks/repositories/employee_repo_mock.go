@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"context"
+
 	"github.com/akatakan/nobetgo/internal/core"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
@@ -52,7 +54,7 @@ func (m *MockEmployeeRepository) GetDB() *gorm.DB {
 	return args.Get(0).(*gorm.DB)
 }
 
-func (m *MockEmployeeRepository) ListPaginated(params core.PaginationParams) ([]core.Employee, int64, error) {
+func (m *MockEmployeeRepository) ListPaginated(ctx context.Context, params core.PaginationParams) ([]core.Employee, int64, error) {
 	args := m.Called(params)
 	if args.Get(0) == nil {
 		return nil, 0, args.Error(2)

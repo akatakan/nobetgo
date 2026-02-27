@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"context"
+
 	"github.com/akatakan/nobetgo/internal/core"
 	"gorm.io/gorm"
 )
@@ -47,23 +49,23 @@ func (r *EmployeeRepository) ListByDepartment(departmentID uint) ([]core.Employe
 	return employees, err
 }
 
-func (r *EmployeeRepository) GetByUsername(username string) (*core.Employee, error) {
+func (r *EmployeeRepository) GetByUsername(ctx context.Context, username string) (*core.Employee, error) {
 	var employee core.Employee
-	err := r.db.Where("username = ?", username).First(&employee).Error
+	err := r.db.WithContext(ctx).Where("username = ?", username).First(&employee).Error
 	return &employee, err
 }
 
-func (r *EmployeeRepository) GetByEmail(email string) (*core.Employee, error) {
+func (r *EmployeeRepository) GetByEmail(ctx context.Context, email string) (*core.Employee, error) {
 	var employee core.Employee
-	err := r.db.Where("email = ?", email).First(&employee).Error
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&employee).Error
 	return &employee, err
 }
 
-func (r *EmployeeRepository) ListPaginated(params core.PaginationParams) ([]core.Employee, int64, error) {
+func (r *EmployeeRepository) ListPaginated(ctx context.Context, params core.PaginationParams) ([]core.Employee, int64, error) {
 	var employees []core.Employee
 	var total int64
 
-	db := r.db.Model(&core.Employee{}).Preload("Department").Preload("Title")
+	db := r.db.WithContext(ctx).Model(&core.Employee{}).Preload("Department").Preload("Title")
 
 	if params.Search != "" {
 		search := "%" + params.Search + "%"

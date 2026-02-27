@@ -34,7 +34,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, role, err := h.service.Login(req.Username, req.Password)
+	token, role, err := h.service.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
 		util.Unauthorized(c, err.Error())
 		return
@@ -56,7 +56,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	token, err := h.service.GenerateResetToken(req.Email)
+	token, err := h.service.GenerateResetToken(c.Request.Context(), req.Email)
 	if err != nil {
 		// We return OK even if user not found to avoid email enumeration
 		// but log the error for internal debugging

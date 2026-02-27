@@ -20,6 +20,7 @@ import (
 	"github.com/akatakan/nobetgo/internal/services"
 	"github.com/akatakan/nobetgo/util"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -69,61 +70,65 @@ func main() {
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_email_unique ON employees (email) WHERE email != '' AND deleted_at IS NULL")
 	slog.Info("Database migration completed")
 
-	// Seed initial admin if no employees exist
-	var employeesCount int64
-	db.Model(&core.Employee{}).Count(&employeesCount)
-	if employeesCount == 0 {
-		// 1. Ensure a default Department exists
-		var dept core.Department
-		if err := db.First(&dept).Error; err != nil {
-			dept = core.Department{Name: "Yönetim", Floor: 0}
-			db.Create(&dept)
-		}
-
-		// 2. Ensure a default Title exists
-		var title core.Title
-		if err := db.First(&title).Error; err != nil {
-			title = core.Title{Name: "Yönetici"}
-			db.Create(&title)
-		}
-
-		// 3. Create Admin
-		hashedPassword, hashErr := util.HashPassword("admin")
-		if hashErr != nil {
-			slog.Error("Cannot hash admin password", "error", hashErr)
-			os.Exit(1)
-		}
-		admin := core.Employee{
-			FirstName:    "Sistem",
-			LastName:     "Yöneticisi",
-			Username:     "admin",
-			Email:        "admin@nobetgo.com",
-			PasswordHash: hashedPassword,
-			Role:         "admin",
-			IsActive:     true,
-			DepartmentID: dept.ID,
-			TitleID:      title.ID,
-		}
-		db.Create(&admin)
-		slog.Info("Initial admin user created: admin / admin")
-
-		// 4. Ensure a default Overtime Rule exists
-		var rule core.OvertimeRule
-		if err := db.First(&rule).Error; err != nil {
-			rule = core.OvertimeRule{
-				Name:               "Standart Mesai Kuralları",
-				WeeklyHourLimit:    45,
-				DailyHourLimit:     11,
-				OvertimeMultiplier: 1.5,
-				WeekendMultiplier:  2.0,
-				HolidayMultiplier:  2.5,
-				NightShiftExtra:    0.1,
-				IsActive:           true,
+	db.Transaction(func(tx *gorm.DB) error {
+		// Seed initial admin if no employees exist
+		var employeesCount int64
+		tx.Model(&core.Employee{}).Count(&employeesCount)
+		if employeesCount == 0 {
+			// 1. Ensure a default Department exists
+			var dept core.Department
+			if err := tx.First(&dept).Error; err != nil {
+				dept = core.Department{Name: "Yönetim", Floor: 0}
+				tx.Create(&dept)
 			}
-			db.Create(&rule)
-			slog.Info("Default overtime rule created")
+
+			// 2. Ensure a default Title exists
+			var title core.Title
+			if err := tx.First(&title).Error; err != nil {
+				title = core.Title{Name: "Yönetici"}
+				tx.Create(&title)
+			}
+
+			// 3. Create Admin
+			hashedPassword, hashErr := util.HashPassword("admin")
+			if hashErr != nil {
+				slog.Error("Cannot hash admin password", "error", hashErr)
+				os.Exit(1)
+			}
+			admin := core.Employee{
+				FirstName:    "Sistem",
+				LastName:     "Yöneticisi",
+				Username:     "admin",
+				Email:        "admin@nobetgo.com",
+				PasswordHash: hashedPassword,
+				Role:         "admin",
+				IsActive:     true,
+				DepartmentID: dept.ID,
+				TitleID:      title.ID,
+			}
+			tx.Create(&admin)
+			slog.Info("Initial admin user created: admin / admin")
+
+			// 4. Ensure a default Overtime Rule exists
+			var rule core.OvertimeRule
+			if err := tx.First(&rule).Error; err != nil {
+				rule = core.OvertimeRule{
+					Name:               "Standart Mesai Kuralları",
+					WeeklyHourLimit:    45,
+					DailyHourLimit:     11,
+					OvertimeMultiplier: 1.5,
+					WeekendMultiplier:  2.0,
+					HolidayMultiplier:  2.5,
+					NightShiftExtra:    0.1,
+					IsActive:           true,
+				}
+				tx.Create(&rule)
+				slog.Info("Default overtime rule created")
+			}
+			return nil
 		}
-	}
+		return nil
+	})
 
 	// ===== Initialize Layers =====
 
@@ -185,7 +190,7 @@ func main() {
 	resetTokenRepo := repositories.NewPasswordResetTokenRepository(db)
 	authService := services.NewAuthService(employeeRepo, resetTokenRepo, cfg.Server.JWTSecret)
 	authHandler := handlers.NewAuthHandler(authService)
-	loginRateLimiter := middleware.NewIPRateLimiter(1.0/60.0, 5) // 5 attempts per minute
+	loginRateLimiter := middleware.NewIPRateLimiter(5.0/60.0, 5) // 5 attempts per minute
 
 	// Backup
 	backupService := services.NewBackupService(cfg.Database)
@@ -196,8 +201,8 @@ func main() {
 	router := gin.New()
 
 	// Request logging middleware
-	router.Use(logger.GinLoggerMiddleware())
 	router.Use(gin.Recovery())
+	router.Use(logger.GinLoggerMiddleware())
 
 	// CORS Middleware — restrict to known origins
 	allowedOrigins := map[string]bool{

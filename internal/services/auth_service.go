@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -25,8 +26,8 @@ func NewAuthService(empRepo *repositories.EmployeeRepository, tokenRepo *reposit
 	}
 }
 
-func (s *AuthService) Login(username, password string) (string, string, error) {
-	employee, err := s.employeeRepo.GetByUsername(username)
+func (s *AuthService) Login(ctx context.Context, username, password string) (string, string, error) {
+	employee, err := s.employeeRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return "", "", errors.New("geçersiz kullanıcı adı veya şifre")
 	}
@@ -43,8 +44,8 @@ func (s *AuthService) Login(username, password string) (string, string, error) {
 	return token, employee.Role, nil
 }
 
-func (s *AuthService) GenerateResetToken(email string) (string, error) {
-	employee, err := s.employeeRepo.GetByEmail(email)
+func (s *AuthService) GenerateResetToken(ctx context.Context, email string) (string, error) {
+	employee, err := s.employeeRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return "", errors.New("bu e-posta adresi ile kayıtlı kullanıcı bulunamadı")
 	}

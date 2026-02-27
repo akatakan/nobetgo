@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -15,7 +16,7 @@ type EmployeeRepositoryInterface interface {
 	GetByID(id uint) (*core.Employee, error)
 	List() ([]core.Employee, error)
 	ListByDepartment(departmentID uint) ([]core.Employee, error)
-	ListPaginated(params core.PaginationParams) ([]core.Employee, int64, error)
+	ListPaginated(ctx context.Context, params core.PaginationParams) ([]core.Employee, int64, error)
 	Update(employee *core.Employee) error
 	Delete(id uint) error
 	GetDB() *gorm.DB
@@ -47,7 +48,7 @@ func (s *EmployeeService) GetAllEmployees() ([]core.Employee, error) {
 	return s.repo.List()
 }
 
-func (s *EmployeeService) GetPaginatedEmployees(params core.PaginationParams) (*core.PaginationResult, error) {
+func (s *EmployeeService) GetPaginatedEmployees(ctx context.Context, params core.PaginationParams) (*core.PaginationResult, error) {
 	if params.Page <= 0 {
 		params.Page = 1
 	}
@@ -58,7 +59,7 @@ func (s *EmployeeService) GetPaginatedEmployees(params core.PaginationParams) (*
 		params.Limit = 100
 	}
 
-	employees, total, err := s.repo.ListPaginated(params)
+	employees, total, err := s.repo.ListPaginated(ctx, params)
 	if err != nil {
 		return nil, err
 	}
