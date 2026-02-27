@@ -1,24 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Clock, Calendar, BarChart3, Settings, Wand2, TrendingUp, Activity, Building2, ClipboardCheck, Award, CalendarOff, ShieldCheck, FileBarChart } from 'lucide-react';
-import EmployeeManager from './components/EmployeeManager';
-import ShiftTypeManager from './components/ShiftTypeManager';
-import ScheduleWizard from './components/ScheduleWizard';
-import ScheduleViewer from './components/ScheduleViewer';
-import DepartmentManager from './components/DepartmentManager';
-import AttendanceManager from './components/AttendanceManager';
-import OvertimeReport from './components/OvertimeReport';
-import LeaveManager from './components/LeaveManager';
-import ApprovalManager from './components/ApprovalManager';
-import ReportingDashboard from './components/ReportingDashboard';
-import TitleManager from './components/TitleManager';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
+import {
+  Activity,
+  Award,
+  BarChart3,
+  Building2,
+  Calendar,
+  CalendarOff,
+  ClipboardCheck,
+  Clock,
+  FileBarChart,
+  Lock as LockIcon,
+  LogOut,
+  Settings,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+  Wand2,
+} from 'lucide-react';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import { NotificationBell } from './components/NotificationBell';
-import { employeeApi, shiftTypeApi, scheduleApi, departmentApi } from './services/api';
-import { LogOut, Lock as LockIcon } from 'lucide-react';
+import { departmentApi, employeeApi, scheduleApi, shiftTypeApi } from './services/api';
 import './App.css';
 
-// Dynamic Dashboard
+const EmployeeManager = lazy(() => import('./components/EmployeeManager'));
+const ShiftTypeManager = lazy(() => import('./components/ShiftTypeManager'));
+const ScheduleWizard = lazy(() => import('./components/ScheduleWizard'));
+const ScheduleViewer = lazy(() => import('./components/ScheduleViewer'));
+const DepartmentManager = lazy(() => import('./components/DepartmentManager'));
+const AttendanceManager = lazy(() => import('./components/AttendanceManager'));
+const OvertimeReport = lazy(() => import('./components/OvertimeReport'));
+const LeaveManager = lazy(() => import('./components/LeaveManager'));
+const ApprovalManager = lazy(() => import('./components/ApprovalManager'));
+const ReportingDashboard = lazy(() => import('./components/ReportingDashboard'));
+const TitleManager = lazy(() => import('./components/TitleManager'));
+
+const TabFallback: React.FC = () => (
+  <div className="glass-card p-12 flex items-center justify-center text-gray-400 animate-fade-in">
+    <div className="flex items-center gap-3">
+      <div className="w-5 h-5 rounded-full border-2 border-blue-400/20 border-t-blue-400 animate-spin" />
+      <span>Ekran yukleniyor...</span>
+    </div>
+  </div>
+);
+
 const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
   const [stats, setStats] = useState({ employees: 0, shifts: 0, schedules: 0, departments: 0 });
   const [loading, setLoading] = useState(true);
@@ -38,26 +63,27 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
           schedules: schedRes.status === 'fulfilled' ? schedRes.value.data.length : 0,
           departments: deptRes.status === 'fulfilled' ? deptRes.value.data.length : 0,
         });
-      } catch { }
+      } catch {
+        // Keep the dashboard resilient if one of the requests fails.
+      }
       setLoading(false);
     };
     fetchStats();
   }, []);
 
   const statCards = [
-    { label: 'Bölümler', value: stats.departments, icon: Building2, gradient: 'from-emerald-500/10 to-teal-500/10', borderColor: 'border-emerald-500/20', iconColor: 'text-emerald-400', valueColor: 'text-emerald-400' },
+    { label: 'Bolumler', value: stats.departments, icon: Building2, gradient: 'from-emerald-500/10 to-teal-500/10', borderColor: 'border-emerald-500/20', iconColor: 'text-emerald-400', valueColor: 'text-emerald-400' },
     { label: 'Toplam Personel', value: stats.employees, icon: Users, gradient: 'from-blue-500/10 to-cyan-500/10', borderColor: 'border-blue-500/20', iconColor: 'text-blue-400', valueColor: 'text-blue-400' },
-    { label: 'Bu Ayki Nöbetler', value: stats.schedules, icon: Calendar, gradient: 'from-purple-500/10 to-pink-500/10', borderColor: 'border-purple-500/20', iconColor: 'text-purple-400', valueColor: 'text-purple-400' },
-    { label: 'Çalışma Tipleri', value: stats.shifts, icon: Clock, gradient: 'from-amber-500/10 to-orange-500/10', borderColor: 'border-amber-500/20', iconColor: 'text-amber-400', valueColor: 'text-amber-400' },
+    { label: 'Bu Ayki Nobetler', value: stats.schedules, icon: Calendar, gradient: 'from-purple-500/10 to-pink-500/10', borderColor: 'border-purple-500/20', iconColor: 'text-purple-400', valueColor: 'text-purple-400' },
+    { label: 'Calisma Tipleri', value: stats.shifts, icon: Clock, gradient: 'from-amber-500/10 to-orange-500/10', borderColor: 'border-amber-500/20', iconColor: 'text-amber-400', valueColor: 'text-amber-400' },
   ];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {statCards.map((card, idx) => (
           <div
-            key={idx}
+            key={card.label}
             className={`glass-card bg-gradient-to-br ${card.gradient} p-6 ${card.borderColor} transition-all duration-300 hover:scale-[1.02] cursor-default animate-slide-up`}
             style={{ animationDelay: `${idx * 100}ms`, animationFillMode: 'both' }}
           >
@@ -68,7 +94,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
                   {loading ? <div className="skeleton w-12 h-8 rounded" /> : card.value}
                 </div>
               </div>
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-white/5`}>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/5">
                 <card.icon className={`w-6 h-6 ${card.iconColor}`} />
               </div>
             </div>
@@ -76,7 +102,6 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
         ))}
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         <div
           className="glass-card p-6 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 border-blue-500/10 hover:border-blue-500/25 transition-all duration-300 cursor-pointer group animate-slide-up"
@@ -89,7 +114,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
             </div>
             <div>
               <h3 className="font-bold text-lg text-white group-hover:text-blue-300 transition-colors">Puantaj Takibi</h3>
-              <p className="text-sm text-gray-400">Otomatik giriş-çıkış ve mesai kaydı</p>
+              <p className="text-sm text-gray-400">Otomatik giris-cikis ve mesai kaydi</p>
             </div>
             <TrendingUp className="w-5 h-5 text-gray-600 ml-auto group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
           </div>
@@ -105,8 +130,8 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
               <CalendarOff className="w-7 h-7 text-emerald-400" />
             </div>
             <div>
-              <h3 className="font-bold text-lg text-white group-hover:text-emerald-300 transition-colors">İzin Yönetimi</h3>
-              <p className="text-sm text-gray-400">İzin talep, onay ve bakiye takibi</p>
+              <h3 className="font-bold text-lg text-white group-hover:text-emerald-300 transition-colors">Izin Yonetimi</h3>
+              <p className="text-sm text-gray-400">Izin talep, onay ve bakiye takibi</p>
             </div>
             <Activity className="w-5 h-5 text-gray-600 ml-auto group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
           </div>
@@ -123,7 +148,7 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
             </div>
             <div>
               <h3 className="font-bold text-lg text-white group-hover:text-purple-300 transition-colors">Raporlar</h3>
-              <p className="text-sm text-gray-400">Çalışma saati ve trend analizi</p>
+              <p className="text-sm text-gray-400">Calisma saati ve trend analizi</p>
             </div>
             <BarChart3 className="w-5 h-5 text-gray-600 ml-auto group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
           </div>
@@ -133,33 +158,34 @@ const DashboardOverview: React.FC<{ onNavigate: (tab: string) => void }> = ({ on
   );
 };
 
-// Settings Page with Title Management
 const SettingsPage: React.FC = () => (
   <div className="space-y-8 animate-fade-in">
     <div>
       <div className="flex items-center gap-2 mb-4">
         <Award className="w-5 h-5 text-violet-400" />
-        <h3 className="text-lg font-semibold text-gray-200">Ünvan Yönetimi</h3>
+        <h3 className="text-lg font-semibold text-gray-200">Unvan Yonetimi</h3>
       </div>
-      <p className="text-sm text-gray-500 mb-4">Personel eklerken seçilebilecek ünvanları buradan yönetebilirsiniz.</p>
-      <TitleManager />
+      <p className="text-sm text-gray-500 mb-4">Personel eklerken secilebilecek unvanlari buradan yonetebilirsiniz.</p>
+      <Suspense fallback={<TabFallback />}>
+        <TitleManager />
+      </Suspense>
     </div>
   </div>
 );
 
 const SUBTITLES: Record<string, string> = {
-  dashboard: 'Genel bakış ve hızlı işlemler',
-  departments: 'Kat ve bölüm tanımlarını yönetin',
-  schedule: 'Aylık nöbet takvimini görüntüleyin',
-  employees: 'Personel kaydı oluşturun ve yönetin',
-  shifts: 'Çalışma tiplerini tanımlayın (Nöbet, Mesai vb.)',
-  scheduler: 'Akıllı algoritmalarla nöbet çizelgesi oluşturun',
-  attendance: 'Otomatik giriş-çıkış ve mesai takibi',
-  overtime: 'Fazla mesai hesaplama ve kural yönetimi',
-  leaves: 'İzin talep, onay ve bakiye takibi',
-  approvals: 'Onay bekleyen kayıtlar ve denetim izi',
-  reports: 'Çalışma saatleri, izin ve trend analizleri',
-  settings: 'Uygulama ayarlarını yönetin',
+  dashboard: 'Genel bakis ve hizli islemler',
+  departments: 'Kat ve bolum tanimlarini yonetin',
+  schedule: 'Aylik nobet takvimini goruntuleyin',
+  employees: 'Personel kaydi olusturun ve yonetin',
+  shifts: 'Calisma tiplerini tanimlayin',
+  scheduler: 'Akilli algoritmalarla nobet cizelgesi olusturun',
+  attendance: 'Otomatik giris-cikis ve mesai takibi',
+  overtime: 'Fazla mesai hesaplama ve kural yonetimi',
+  leaves: 'Izin talep, onay ve bakiye takibi',
+  approvals: 'Onay bekleyen kayitlar ve denetim izi',
+  reports: 'Calisma saatleri, izin ve trend analizleri',
+  settings: 'Uygulama ayarlarini yonetin',
 };
 
 const App: React.FC = () => {
@@ -168,9 +194,9 @@ const App: React.FC = () => {
   const [role, setRole] = useState<string | null>(localStorage.getItem('role'));
   const [showChangePassword, setShowChangePassword] = useState(false);
 
-  const handleLoginSuccess = (token: string, role: string) => {
-    setToken(token);
-    setRole(role);
+  const handleLoginSuccess = (nextToken: string, nextRole: string) => {
+    setToken(nextToken);
+    setRole(nextRole);
   };
 
   const handleLogout = () => {
@@ -186,19 +212,18 @@ const App: React.FC = () => {
 
   const navItems = [
     { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
-    { id: 'departments', icon: Building2, label: 'Bölümler' },
-    { id: 'schedule', icon: Calendar, label: 'Nöbet Takvimi' },
+    { id: 'departments', icon: Building2, label: 'Bolumler' },
+    { id: 'schedule', icon: Calendar, label: 'Nobet Takvimi' },
     { id: 'employees', icon: Users, label: 'Personel' },
-    { id: 'shifts', icon: Clock, label: 'Çalışma Tipleri' },
+    { id: 'shifts', icon: Clock, label: 'Calisma Tipleri' },
     { id: 'scheduler', icon: Wand2, label: 'Otomatik Planla' },
     { id: 'attendance', icon: ClipboardCheck, label: 'Puantaj' },
-    { id: 'leaves', icon: CalendarOff, label: 'İzinler' },
+    { id: 'leaves', icon: CalendarOff, label: 'Izinler' },
     { id: 'overtime', icon: TrendingUp, label: 'Mesai' },
     { id: 'approvals', icon: ShieldCheck, label: 'Onaylar' },
     { id: 'reports', icon: FileBarChart, label: 'Raporlar' },
     { id: 'settings', icon: Settings, label: 'Ayarlar' },
-  ].filter(item => {
-    // Only admins see management tabs
+  ].filter((item) => {
     if (role !== 'admin') {
       return !['scheduler', 'approvals', 'settings', 'departments', 'shifts'].includes(item.id);
     }
@@ -208,29 +233,28 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen bg-[var(--bg-primary)] text-white overflow-hidden">
       <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} />
-      {/* Sidebar */}
+
       <aside className="w-64 bg-[var(--bg-secondary)] border-r border-white/[0.06] flex flex-col">
-        {/* Logo */}
         <div className="p-6 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
             <Calendar className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold text-xl bg-gradient-to-r from-blue-400 to-blue-300 bg-clip-text text-transparent">
-            NöbetGo
+            NobetGo
           </span>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 px-3 py-2 overflow-y-auto">
           <ul className="space-y-1">
             {navItems.map((item) => (
               <li key={item.id}>
                 <button
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium relative ${activeTab === item.id
-                    ? 'bg-blue-500/10 text-blue-400'
-                    : 'text-gray-400 hover:bg-white/[0.03] hover:text-gray-200'
-                    }`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium relative ${
+                    activeTab === item.id
+                      ? 'bg-blue-500/10 text-blue-400'
+                      : 'text-gray-400 hover:bg-white/[0.03] hover:text-gray-200'
+                  }`}
                 >
                   {activeTab === item.id && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-blue-500 rounded-r-full" />
@@ -243,61 +267,58 @@ const App: React.FC = () => {
           </ul>
         </nav>
 
-        {/* Bottom */}
         <div className="p-4 border-t border-white/[0.04]">
           <button
             onClick={() => setShowChangePassword(true)}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-blue-500/10 hover:text-blue-400 transition-all text-sm font-medium mb-1"
           >
             <LockIcon className="w-[18px] h-[18px]" />
-            Şifre Değiştir
+            Sifre Degistir
           </button>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-all text-sm font-medium mb-2"
           >
             <LogOut className="w-[18px] h-[18px]" />
-            Güvenli Çıkış
+            Guvenli Cikis
           </button>
-          <div className="text-xs text-gray-600 text-center">
-            NöbetGo v0.3.1
-          </div>
+          <div className="text-xs text-gray-600 text-center">NobetGo v0.3.1</div>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-auto">
         <header className="sticky top-0 z-10 bg-[var(--bg-primary)]/80 backdrop-blur-xl border-b border-white/[0.04] px-8 py-5 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-white">
-              {navItems.find(i => i.id === activeTab)?.label}
-            </h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {SUBTITLES[activeTab]}
-            </p>
+            <h1 className="text-2xl font-bold text-white">{navItems.find((item) => item.id === activeTab)?.label}</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{SUBTITLES[activeTab]}</p>
           </div>
           <div className="flex items-center gap-4">
             <NotificationBell />
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-medium text-gray-300 uppercase tracking-wider">{role}</span>
             </div>
           </div>
         </header>
 
         <div className="p-8">
-          {activeTab === 'dashboard' && <DashboardOverview onNavigate={setActiveTab} />}
-          {activeTab === 'departments' && <DepartmentManager />}
-          {activeTab === 'schedule' && <ScheduleViewer />}
-          {activeTab === 'employees' && <EmployeeManager />}
-          {activeTab === 'shifts' && <ShiftTypeManager />}
-          {activeTab === 'scheduler' && <ScheduleWizard onNavigate={setActiveTab} />}
-          {activeTab === 'attendance' && <AttendanceManager />}
-          {activeTab === 'leaves' && <LeaveManager />}
-          {activeTab === 'overtime' && <OvertimeReport />}
-          {activeTab === 'approvals' && <ApprovalManager />}
-          {activeTab === 'reports' && <ReportingDashboard />}
-          {activeTab === 'settings' && <SettingsPage />}
+          {activeTab === 'dashboard' ? (
+            <DashboardOverview onNavigate={setActiveTab} />
+          ) : (
+            <Suspense fallback={<TabFallback />}>
+              {activeTab === 'departments' && <DepartmentManager />}
+              {activeTab === 'schedule' && <ScheduleViewer />}
+              {activeTab === 'employees' && <EmployeeManager />}
+              {activeTab === 'shifts' && <ShiftTypeManager />}
+              {activeTab === 'scheduler' && <ScheduleWizard onNavigate={setActiveTab} />}
+              {activeTab === 'attendance' && <AttendanceManager />}
+              {activeTab === 'leaves' && <LeaveManager />}
+              {activeTab === 'overtime' && <OvertimeReport />}
+              {activeTab === 'approvals' && <ApprovalManager />}
+              {activeTab === 'reports' && <ReportingDashboard />}
+              {activeTab === 'settings' && <SettingsPage />}
+            </Suspense>
+          )}
         </div>
       </main>
     </div>

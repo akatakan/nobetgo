@@ -22,10 +22,22 @@ func NewTimeEntryHandler(service *services.TimekeepingService) *TimeEntryHandler
 
 // ClockIn handles POST /time-entries/clock-in
 func (h *TimeEntryHandler) ClockIn(c *gin.Context) {
-	var req core.ClockInRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	req := core.ClockInRequest{
+		EmployeeID: actor.id,
+		Notes:      body.Notes,
 	}
 
 	entry, err := h.service.ClockIn(req)
@@ -39,10 +51,22 @@ func (h *TimeEntryHandler) ClockIn(c *gin.Context) {
 
 // ClockOut handles POST /time-entries/clock-out
 func (h *TimeEntryHandler) ClockOut(c *gin.Context) {
-	var req core.ClockOutRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	req := core.ClockOutRequest{
+		EmployeeID: actor.id,
+		Notes:      body.Notes,
 	}
 
 	entry, err := h.service.ClockOut(req)
@@ -105,7 +129,7 @@ func (h *TimeEntryHandler) DeleteTimeEntry(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Kayıt silindi"})
+	c.JSON(http.StatusOK, gin.H{"message": "Kayit silindi"})
 }
 
 // GetTimeEntry handles GET /time-entries/:id
@@ -115,9 +139,17 @@ func (h *TimeEntryHandler) GetTimeEntry(c *gin.Context) {
 		return
 	}
 
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
 	entry, err := h.service.GetTimeEntry(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	if !ensureOwnsEmployeeResource(c, actor, entry.EmployeeID) {
 		return
 	}
 
@@ -126,6 +158,11 @@ func (h *TimeEntryHandler) GetTimeEntry(c *gin.Context) {
 
 // ListTimeEntries handles GET /time-entries with optional filters and pagination
 func (h *TimeEntryHandler) ListTimeEntries(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
 	var params core.PaginationParams
 	params.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
 	params.Limit, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
@@ -137,10 +174,21 @@ func (h *TimeEntryHandler) ListTimeEntries(c *gin.Context) {
 		return
 	}
 
-	employeeID, _ := strconv.ParseUint(c.Query("employee_id"), 10, 32)
-	departmentID, _ := strconv.ParseUint(c.Query("department_id"), 10, 32)
+	employeeID, ok := resolveEmployeeAccess(c, actor, "employee_id", false)
+	if !ok {
+		return
+	}
 
-	result, err := h.service.GetPaginatedTimeEntries(params, uint(employeeID), uint(departmentID), start, end)
+	departmentID, ok := parseOptionalUintQuery(c, "department_id")
+	if !ok {
+		return
+	}
+	if !actor.isAdmin() && departmentID != 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Bu kaynaga erisim izniniz yok"})
+		return
+	}
+
+	result, err := h.service.GetPaginatedTimeEntries(params, employeeID, departmentID, start, end)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -155,7 +203,7 @@ func parseUintParam(c *gin.Context, name string) (uint, error) {
 	idStr := c.Param(name)
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz " + name})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gecersiz " + name})
 		return 0, err
 	}
 	return uint(id), nil

@@ -31,7 +31,7 @@ const ScheduleEditModal: React.FC<Props> = ({ isOpen, schedule, date, onClose, o
                 employeeApi.list(),
                 shiftTypeApi.list(),
             ]).then(([empRes, shiftRes]) => {
-                setEmployees(empRes.data.filter((e: Employee) => e.IsActive));
+                setEmployees((empRes.data.data || []).filter((e: Employee) => e.IsActive));
                 setShiftTypes(shiftRes.data);
 
                 if (schedule) {

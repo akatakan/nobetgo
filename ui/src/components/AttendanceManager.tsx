@@ -95,7 +95,7 @@ const AttendanceManager: React.FC = () => {
     const handleClockIn = async (employeeId: number) => {
         setActionLoading(`clockin-${employeeId}`);
         try {
-            await timeEntryApi.clockIn({ employee_id: employeeId });
+            await timeEntryApi.clockIn();
             fetchEntries();
         } catch (err: any) {
             alert(err?.response?.data?.error || 'Giriş kaydı hatası');
@@ -108,7 +108,7 @@ const AttendanceManager: React.FC = () => {
     const handleClockOut = async (employeeId: number) => {
         setActionLoading(`clockout-${employeeId}`);
         try {
-            await timeEntryApi.clockOut({ employee_id: employeeId });
+            await timeEntryApi.clockOut();
             fetchEntries();
         } catch (err: any) {
             alert(err?.response?.data?.error || 'Çıkış kaydı hatası');
@@ -173,7 +173,6 @@ const AttendanceManager: React.FC = () => {
     }, {});
 
     // Summary stats
-    const totalEntries = entries.length;
     const approvedCount = entries.filter(e => e.status === 'approved').length;
     const pendingCount = entries.filter(e => e.status === 'pending').length;
     const activeClockIns = entries.filter(e => !e.clock_out).length;

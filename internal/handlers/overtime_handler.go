@@ -22,20 +22,28 @@ func NewOvertimeHandler(service *services.OvertimeService) *OvertimeHandler {
 
 // CalculateOvertime handles GET /overtime/calculate?employee_id=&month=&year=
 func (h *OvertimeHandler) CalculateOvertime(c *gin.Context) {
-	empIDStr := c.Query("employee_id")
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")
 
-	if empIDStr == "" || monthStr == "" || yearStr == "" {
+	if monthStr == "" || yearStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "employee_id, month ve year gerekli"})
 		return
 	}
 
-	empID, _ := strconv.ParseUint(empIDStr, 10, 32)
+	employeeID, ok := resolveEmployeeAccess(c, actor, "employee_id", true)
+	if !ok {
+		return
+	}
+
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
 
-	summary, err := h.service.CalculateOvertime(uint(empID), month, year)
+	summary, err := h.service.CalculateOvertime(employeeID, month, year)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -46,6 +54,14 @@ func (h *OvertimeHandler) CalculateOvertime(c *gin.Context) {
 
 // GetDepartmentSummary handles GET /overtime/summary?department_id=&month=&year=
 func (h *OvertimeHandler) GetDepartmentSummary(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+	if !requireAdminAccess(c, actor) {
+		return
+	}
+
 	deptIDStr := c.Query("department_id")
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")

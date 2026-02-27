@@ -25,15 +25,33 @@ func NewLeaveHandler(service *services.LeaveService) *LeaveHandler {
 
 // RequestLeave handles POST /leaves
 func (h *LeaveHandler) RequestLeave(c *gin.Context) {
-	var req core.LeaveRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
+	}
+
+	var body struct {
+		LeaveTypeID uint      `json:"leave_type_id" binding:"required"`
+		StartDate   time.Time `json:"start_date" binding:"required"`
+		EndDate     time.Time `json:"end_date" binding:"required"`
+		Reason      string    `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		util.BadRequest(c, "Gecersiz veri", err)
+		return
+	}
+
+	req := core.LeaveRequest{
+		EmployeeID:  actor.id,
+		LeaveTypeID: body.LeaveTypeID,
+		StartDate:   body.StartDate,
+		EndDate:     body.EndDate,
+		Reason:      body.Reason,
 	}
 
 	leave, err := h.service.RequestLeave(req)
 	if err != nil {
-		util.JSONError(c, http.StatusConflict, "İzin talebi çakışıyor", err)
+		util.JSONError(c, http.StatusConflict, "Izin talebi cakisiyor", err)
 		return
 	}
 
@@ -47,9 +65,17 @@ func (h *LeaveHandler) GetLeave(c *gin.Context) {
 		return
 	}
 
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
 	leave, err := h.service.GetLeave(id)
 	if err != nil {
-		util.JSONError(c, http.StatusNotFound, "İzin bulunamadı", err)
+		util.JSONError(c, http.StatusNotFound, "Izin bulunamadi", err)
+		return
+	}
+	if !ensureOwnsEmployeeResource(c, actor, leave.EmployeeID) {
 		return
 	}
 
@@ -58,6 +84,11 @@ func (h *LeaveHandler) GetLeave(c *gin.Context) {
 
 // ListLeaves handles GET /leaves with query params
 func (h *LeaveHandler) ListLeaves(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
 	var params core.PaginationParams
 	params.Page, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
 	params.Limit, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
@@ -72,12 +103,23 @@ func (h *LeaveHandler) ListLeaves(c *gin.Context) {
 		end, _ = time.Parse("2006-01-02", endStr)
 	}
 
-	employeeID, _ := strconv.ParseUint(c.Query("employee_id"), 10, 32)
-	departmentID, _ := strconv.ParseUint(c.Query("department_id"), 10, 32)
+	employeeID, ok := resolveEmployeeAccess(c, actor, "employee_id", false)
+	if !ok {
+		return
+	}
 
-	result, err := h.service.GetPaginatedLeaves(params, uint(employeeID), uint(departmentID), start, end)
+	departmentID, ok := parseOptionalUintQuery(c, "department_id")
+	if !ok {
+		return
+	}
+	if !actor.isAdmin() && departmentID != 0 {
+		util.Forbidden(c, "Bu kaynaga erisim izniniz yok")
+		return
+	}
+
+	result, err := h.service.GetPaginatedLeaves(params, employeeID, departmentID, start, end)
 	if err != nil {
-		util.InternalError(c, "İzinler getirilemedi", err)
+		util.InternalError(c, "Izinler getirilemedi", err)
 		return
 	}
 
@@ -91,16 +133,14 @@ func (h *LeaveHandler) ApproveLeave(c *gin.Context) {
 		return
 	}
 
-	// Get approver ID from authenticated JWT context
-	approverID, exists := c.Get("userID")
-	if !exists {
-		util.Unauthorized(c, "Oturum geçersiz")
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	leave, err := h.service.ApproveLeave(id, approverID.(uint))
+	leave, err := h.service.ApproveLeave(id, actor.id)
 	if err != nil {
-		util.InternalError(c, "İzin onaylanamadı", err)
+		util.InternalError(c, "Izin onaylanamadi", err)
 		return
 	}
 
@@ -114,16 +154,14 @@ func (h *LeaveHandler) RejectLeave(c *gin.Context) {
 		return
 	}
 
-	// Get approver ID from authenticated JWT context
-	approverID, exists := c.Get("userID")
-	if !exists {
-		util.Unauthorized(c, "Oturum geçersiz")
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	leave, err := h.service.RejectLeave(id, approverID.(uint))
+	leave, err := h.service.RejectLeave(id, actor.id)
 	if err != nil {
-		util.InternalError(c, "İzin reddedilemedi", err)
+		util.InternalError(c, "Izin reddedilemedi", err)
 		return
 	}
 
@@ -132,18 +170,21 @@ func (h *LeaveHandler) RejectLeave(c *gin.Context) {
 
 // GetLeaveBalance handles GET /leaves/balance?employee_id=&year=
 func (h *LeaveHandler) GetLeaveBalance(c *gin.Context) {
-	empIDStr := c.Query("employee_id")
-	yearStr := c.DefaultQuery("year", strconv.Itoa(time.Now().Year()))
-
-	if empIDStr == "" {
-		util.BadRequest(c, "employee_id gerekli", nil)
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	empID, _ := strconv.ParseUint(empIDStr, 10, 32)
+	yearStr := c.DefaultQuery("year", strconv.Itoa(time.Now().Year()))
+
+	employeeID, ok := resolveEmployeeAccess(c, actor, "employee_id", false)
+	if !ok {
+		return
+	}
+
 	year, _ := strconv.Atoi(yearStr)
 
-	balances, err := h.service.GetLeaveBalance(uint(empID), year)
+	balances, err := h.service.GetLeaveBalance(employeeID, year)
 	if err != nil {
 		util.InternalError(c, "Bakiye getirilemedi", err)
 		return
@@ -158,12 +199,12 @@ func (h *LeaveHandler) GetLeaveBalance(c *gin.Context) {
 func (h *LeaveHandler) CreateLeaveType(c *gin.Context) {
 	var lt core.LeaveType
 	if err := c.ShouldBindJSON(&lt); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+		util.BadRequest(c, "Gecersiz veri", err)
 		return
 	}
 
 	if err := h.service.CreateLeaveType(&lt); err != nil {
-		util.InternalError(c, "İzin türü oluşturulamadı", err)
+		util.InternalError(c, "Izin turu olusturulamadi", err)
 		return
 	}
 
@@ -174,7 +215,7 @@ func (h *LeaveHandler) CreateLeaveType(c *gin.Context) {
 func (h *LeaveHandler) GetAllLeaveTypes(c *gin.Context) {
 	types, err := h.service.GetAllLeaveTypes()
 	if err != nil {
-		util.InternalError(c, "İzin türleri getirilemedi", err)
+		util.InternalError(c, "Izin turleri getirilemedi", err)
 		return
 	}
 	c.JSON(http.StatusOK, types)
@@ -189,7 +230,7 @@ func (h *LeaveHandler) GetLeaveType(c *gin.Context) {
 
 	lt, err := h.service.GetLeaveType(id)
 	if err != nil {
-		util.JSONError(c, http.StatusNotFound, "İzin türü bulunamadı", err)
+		util.JSONError(c, http.StatusNotFound, "Izin turu bulunamadi", err)
 		return
 	}
 
@@ -205,13 +246,13 @@ func (h *LeaveHandler) UpdateLeaveType(c *gin.Context) {
 
 	var lt core.LeaveType
 	if err := c.ShouldBindJSON(&lt); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+		util.BadRequest(c, "Gecersiz veri", err)
 		return
 	}
 	lt.ID = id
 
 	if err := h.service.UpdateLeaveType(&lt); err != nil {
-		util.InternalError(c, "Güncelleme başarısız", err)
+		util.InternalError(c, "Guncelleme basarisiz", err)
 		return
 	}
 
@@ -226,9 +267,9 @@ func (h *LeaveHandler) DeleteLeaveType(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteLeaveType(id); err != nil {
-		util.InternalError(c, "Silme işlemi başarısız", err)
+		util.InternalError(c, "Silme islemi basarisiz", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "İzin türü silindi"})
+	c.JSON(http.StatusOK, gin.H{"message": "Izin turu silindi"})
 }

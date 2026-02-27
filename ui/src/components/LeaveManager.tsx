@@ -104,7 +104,8 @@ const LeaveManager: React.FC = () => {
         }
         setActionLoading('request');
         try {
-            await leaveApi.request(requestForm);
+            const { employee_id: _ignoredEmployeeId, ...payload } = requestForm;
+            await leaveApi.request(payload);
             setShowRequestForm(false);
             setRequestForm({ employee_id: 0, leave_type_id: 0, start_date: '', end_date: '', reason: '' });
             fetchLeaves();
@@ -118,7 +119,7 @@ const LeaveManager: React.FC = () => {
     const handleApprove = async (id: number) => {
         setActionLoading(`approve-${id}`);
         try {
-            await leaveApi.approve(id, 1); // TODO: real approver from auth
+            await leaveApi.approve(id);
             fetchLeaves();
         } catch (err: any) {
             alert(err?.response?.data?.error || 'Onay hatası');
@@ -130,7 +131,7 @@ const LeaveManager: React.FC = () => {
     const handleReject = async (id: number) => {
         setActionLoading(`reject-${id}`);
         try {
-            await leaveApi.reject(id, 1);
+            await leaveApi.reject(id);
             fetchLeaves();
         } catch (err: any) {
             alert(err?.response?.data?.error || 'Red hatası');

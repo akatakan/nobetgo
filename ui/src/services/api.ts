@@ -98,8 +98,14 @@ export const scheduleApi = {
 
 // ===== Time Entry (Puantaj) =====
 export const timeEntryApi = {
-    clockIn: (data: ClockInRequest) => api.post<TimeEntry>('/time-entries/clock-in', data),
-    clockOut: (data: ClockOutRequest) => api.post<TimeEntry>('/time-entries/clock-out', data),
+    clockIn: (data?: Partial<ClockInRequest>) => {
+        const payload = data?.notes ? { notes: data.notes } : {};
+        return api.post<TimeEntry>('/time-entries/clock-in', payload);
+    },
+    clockOut: (data?: Partial<ClockOutRequest>) => {
+        const payload = data?.notes ? { notes: data.notes } : {};
+        return api.post<TimeEntry>('/time-entries/clock-out', payload);
+    },
     create: (data: TimeEntryRequest) => api.post<TimeEntry>('/time-entries', data),
     list: (params: PaginationParams & { employee_id?: number; department_id?: number; start?: string; end?: string }) =>
         api.get<PaginationResult<TimeEntry>>('/time-entries', { params }),
@@ -110,14 +116,17 @@ export const timeEntryApi = {
 
 // ===== Leave (İzin) =====
 export const leaveApi = {
-    request: (data: LeaveRequest) => api.post<Leave>('/leaves', data),
+    request: (data: Omit<LeaveRequest, 'employee_id'> | LeaveRequest) => {
+        const { employee_id: _ignoredEmployeeId, ...payload } = data as LeaveRequest;
+        return api.post<Leave>('/leaves', payload);
+    },
     list: (params: PaginationParams & { employee_id?: number; department_id?: number; start?: string; end?: string }) =>
         api.get<PaginationResult<Leave>>('/leaves', { params }),
     getById: (id: number) => api.get<Leave>(`/leaves/${id}`),
-    approve: (id: number, approver_id: number) =>
-        api.post<Leave>(`/leaves/${id}/approve`, { approver_id }),
-    reject: (id: number, approver_id: number) =>
-        api.post<Leave>(`/leaves/${id}/reject`, { approver_id }),
+    approve: (id: number, _approverId?: number) =>
+        api.post<Leave>(`/leaves/${id}/approve`),
+    reject: (id: number, _approverId?: number) =>
+        api.post<Leave>(`/leaves/${id}/reject`),
     getBalance: (employee_id: number, year: number) =>
         api.get<LeaveBalance[]>('/leaves/balance', { params: { employee_id, year } }),
 };
@@ -154,10 +163,10 @@ export const publicHolidayApi = {
 // ===== Approval (Onay) =====
 export const approvalApi = {
     getPending: () => api.get<PendingApprovals>('/approvals/pending'),
-    approveTimeEntry: (id: number, approver_id: number) =>
-        api.post(`/approvals/time-entry/${id}/approve`, { approver_id }),
-    rejectTimeEntry: (id: number, approver_id: number) =>
-        api.post(`/approvals/time-entry/${id}/reject`, { approver_id }),
+    approveTimeEntry: (id: number, _approverId?: number) =>
+        api.post(`/approvals/time-entry/${id}/approve`),
+    rejectTimeEntry: (id: number, _approverId?: number) =>
+        api.post(`/approvals/time-entry/${id}/reject`),
     getAuditLogs: (entity_type: string, entity_id?: number) =>
         api.get<AuditLog[]>('/audit-logs', { params: { entity_type, entity_id } }),
 };
@@ -178,12 +187,12 @@ export const reportApi = {
 
 // ===== Notifications =====
 export const notificationApi = {
-    getUnread: (employee_id: number) =>
-        api.get<Notification[]>('/notifications/unread', { params: { employee_id } }),
+    getUnread: (_employeeId?: number) =>
+        api.get<Notification[]>('/notifications/unread'),
     markAsRead: (id: number) =>
         api.post(`/notifications/${id}/read`),
-    markAllAsRead: (employee_id: number) =>
-        api.post('/notifications/read-all', { employee_id }),
+    markAllAsRead: (_employeeId?: number) =>
+        api.post('/notifications/read-all', {}),
 };
 
 export default api;

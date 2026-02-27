@@ -20,6 +20,14 @@ func NewReportingHandler(service *services.ReportingService) *ReportingHandler {
 
 // GetWorkHoursReport handles GET /reports/work-hours?department_id=&month=&year=
 func (h *ReportingHandler) GetWorkHoursReport(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+	if !requireAdminAccess(c, actor) {
+		return
+	}
+
 	deptID, month, year, err := parseReportParams(c)
 	if err != nil {
 		return
@@ -36,6 +44,14 @@ func (h *ReportingHandler) GetWorkHoursReport(c *gin.Context) {
 
 // GetAbsenceReport handles GET /reports/absences?department_id=&month=&year=
 func (h *ReportingHandler) GetAbsenceReport(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+	if !requireAdminAccess(c, actor) {
+		return
+	}
+
 	deptID, month, year, err := parseReportParams(c)
 	if err != nil {
 		return
@@ -52,20 +68,28 @@ func (h *ReportingHandler) GetAbsenceReport(c *gin.Context) {
 
 // GetEmployeeSummary handles GET /reports/employee-summary?employee_id=&month=&year=
 func (h *ReportingHandler) GetEmployeeSummary(c *gin.Context) {
-	empIDStr := c.Query("employee_id")
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")
 
-	if empIDStr == "" || monthStr == "" || yearStr == "" {
+	if monthStr == "" || yearStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "employee_id, month ve year gerekli"})
 		return
 	}
 
-	empID, _ := strconv.ParseUint(empIDStr, 10, 32)
+	employeeID, ok := resolveEmployeeAccess(c, actor, "employee_id", true)
+	if !ok {
+		return
+	}
+
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
 
-	summary, err := h.service.GetEmployeeSummary(uint(empID), month, year)
+	summary, err := h.service.GetEmployeeSummary(employeeID, month, year)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -76,6 +100,14 @@ func (h *ReportingHandler) GetEmployeeSummary(c *gin.Context) {
 
 // GetTrendAnalysis handles GET /reports/trends?department_id=&start_month=&end_month=&year=
 func (h *ReportingHandler) GetTrendAnalysis(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+	if !requireAdminAccess(c, actor) {
+		return
+	}
+
 	deptIDStr := c.DefaultQuery("department_id", "0")
 	startMonthStr := c.Query("start_month")
 	endMonthStr := c.Query("end_month")
@@ -125,6 +157,14 @@ func (e *missingParamsError) Error() string { return "eksik parametreler" }
 
 // GetCostAnalysis handles GET /reports/cost-analysis?department_id=&month=&year=
 func (h *ReportingHandler) GetCostAnalysis(c *gin.Context) {
+	actor, ok := getActingUser(c)
+	if !ok {
+		return
+	}
+	if !requireAdminAccess(c, actor) {
+		return
+	}
+
 	deptID, month, year, err := parseReportParams(c)
 	if err != nil {
 		return

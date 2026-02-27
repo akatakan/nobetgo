@@ -52,6 +52,9 @@ func (s *OvertimeService) CalculateOvertime(employeeID uint, month, year int) (*
 		rule = defaultOvertimeRule()
 	}
 
+	// Bug 1 fix: Pre-fetch all holidays for the year into a map (eliminates N+1 queries)
+	holidayMap := s.buildHolidayMap(year)
+
 	summary := &OvertimeSummary{
 		EmployeeID: employeeID,
 	}
@@ -68,23 +71,25 @@ func (s *OvertimeService) CalculateOvertime(employeeID uint, month, year int) (*
 		summary.TotalHours += hours
 		summary.WorkingDays++
 
-		// Set employee name from first entry
-		if summary.EmployeeName == "" {
+		// Bug 3 fix: Guard against nil Employee before accessing fields
+		if summary.EmployeeName == "" && entry.Employee.ID != 0 {
 			summary.EmployeeName = entry.Employee.FirstName + " " + entry.Employee.LastName
 		}
 
-		// Classify hours
-		isHoliday, _ := s.ruleRepo.IsHoliday(entry.ClockIn)
+		// Classify hours — O(1) map lookup instead of DB query
+		isHoliday := holidayMap[entry.ClockIn.Truncate(24*time.Hour).Format("2006-01-02")]
 		isWeekend := entry.ClockIn.Weekday() == time.Saturday || entry.ClockIn.Weekday() == time.Sunday
 
+		// Bug 6 fix: Always add hours to weeklyHours so ALL hours count toward the 45h weekly limit
+		_, week := entry.ClockIn.ISOWeek()
+		weeklyHours[week] += hours
+
+		// Track type-specific hours for pay multipliers
 		switch {
 		case isHoliday:
 			summary.HolidayHours += hours
 		case isWeekend:
 			summary.WeekendHours += hours
-		default:
-			_, week := entry.ClockIn.ISOWeek()
-			weeklyHours[week] += hours
 		}
 
 		// Night shift check (simplified: if entry type is marked or shift starts after 22:00)
@@ -103,8 +108,8 @@ func (s *OvertimeService) CalculateOvertime(employeeID uint, month, year int) (*
 		}
 	}
 
-	// Pay calculation
-	if len(entries) > 0 {
+	// Bug 3 fix: Guard against nil/zero Employee before accessing HourlyRate
+	if len(entries) > 0 && entries[0].Employee.ID != 0 {
 		rate := entries[0].Employee.HourlyRate
 		summary.OvertimePay = summary.OvertimeHours * rate * rule.OvertimeMultiplier
 		summary.WeekendPay = summary.WeekendHours * rate * rule.WeekendMultiplier
@@ -130,6 +135,9 @@ func (s *OvertimeService) GetDepartmentOvertimeSummary(deptID uint, month, year 
 		rule = defaultOvertimeRule()
 	}
 
+	// Bug 1 fix: Pre-fetch all holidays for the year into a map (eliminates N+1 queries)
+	holidayMap := s.buildHolidayMap(year)
+
 	// Group entries by employee
 	grouped := make(map[uint][]core.TimeEntry)
 	for _, e := range entries {
@@ -153,21 +161,24 @@ func (s *OvertimeService) GetDepartmentOvertimeSummary(deptID uint, month, year 
 			summary.TotalHours += hours
 			summary.WorkingDays++
 
-			if summary.EmployeeName == "" {
+			// Bug 3 fix: Guard against nil Employee
+			if summary.EmployeeName == "" && entry.Employee.ID != 0 {
 				summary.EmployeeName = entry.Employee.FirstName + " " + entry.Employee.LastName
 			}
 
-			isHoliday, _ := s.ruleRepo.IsHoliday(entry.ClockIn)
+			// O(1) map lookup instead of DB query
+			isHoliday := holidayMap[entry.ClockIn.Truncate(24*time.Hour).Format("2006-01-02")]
 			isWeekend := entry.ClockIn.Weekday() == time.Saturday || entry.ClockIn.Weekday() == time.Sunday
+
+			// Bug 6 fix: Always add hours to weeklyHours
+			_, week := entry.ClockIn.ISOWeek()
+			weeklyHours[week] += hours
 
 			switch {
 			case isHoliday:
 				summary.HolidayHours += hours
 			case isWeekend:
 				summary.WeekendHours += hours
-			default:
-				_, week := entry.ClockIn.ISOWeek()
-				weeklyHours[week] += hours
 			}
 		}
 
@@ -180,8 +191,8 @@ func (s *OvertimeService) GetDepartmentOvertimeSummary(deptID uint, month, year 
 			}
 		}
 
-		// Pay calculation
-		if len(empEntries) > 0 {
+		// Bug 3 fix: Guard against nil Employee for HourlyRate
+		if len(empEntries) > 0 && empEntries[0].Employee.ID != 0 {
 			rate := empEntries[0].Employee.HourlyRate
 			summary.OvertimePay = summary.OvertimeHours * rate * rule.OvertimeMultiplier
 			summary.WeekendPay = summary.WeekendHours * rate * rule.WeekendMultiplier
@@ -237,6 +248,20 @@ func (s *OvertimeService) GetHolidays(year int) ([]core.PublicHoliday, error) {
 
 func (s *OvertimeService) DeleteHoliday(id uint) error {
 	return s.ruleRepo.DeleteHoliday(id)
+}
+
+// buildHolidayMap fetches all holidays for the given year and returns a date-keyed map for O(1) lookups.
+func (s *OvertimeService) buildHolidayMap(year int) map[string]bool {
+	holidayMap := make(map[string]bool)
+	holidays, err := s.ruleRepo.ListHolidays(year)
+	if err != nil {
+		slog.Warn("Failed to fetch holidays, assuming none", "year", year, "error", err)
+		return holidayMap
+	}
+	for _, h := range holidays {
+		holidayMap[h.Date.Truncate(24*time.Hour).Format("2006-01-02")] = true
+	}
+	return holidayMap
 }
 
 func defaultOvertimeRule() *core.OvertimeRule {

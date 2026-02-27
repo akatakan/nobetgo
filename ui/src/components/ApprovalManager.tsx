@@ -41,7 +41,7 @@ const ApprovalManager: React.FC = () => {
     const handleApproveEntry = async (id: number) => {
         setActionLoading(`approve-entry-${id}`);
         try {
-            await approvalApi.approveTimeEntry(id, 1);
+            await approvalApi.approveTimeEntry(id);
             fetchPending();
             fetchLogs();
         } catch (err: any) {
@@ -54,7 +54,7 @@ const ApprovalManager: React.FC = () => {
     const handleRejectEntry = async (id: number) => {
         setActionLoading(`reject-entry-${id}`);
         try {
-            await approvalApi.rejectTimeEntry(id, 1);
+            await approvalApi.rejectTimeEntry(id);
             fetchPending();
             fetchLogs();
         } catch (err: any) {

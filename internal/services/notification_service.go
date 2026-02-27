@@ -30,8 +30,8 @@ func (s *NotificationService) GetUnread(employeeID uint) ([]core.Notification, e
 	return s.repo.GetUnreadByEmployee(employeeID)
 }
 
-func (s *NotificationService) MarkAsRead(id uint) error {
-	return s.repo.MarkAsRead(id)
+func (s *NotificationService) MarkAsRead(id uint, employeeID uint) (bool, error) {
+	return s.repo.MarkAsReadForEmployee(id, employeeID)
 }
 
 func (s *NotificationService) MarkAllAsRead(employeeID uint) error {

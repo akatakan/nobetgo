@@ -37,17 +37,14 @@ func (h *ApprovalHandler) ApproveTimeEntry(c *gin.Context) {
 		return
 	}
 
-	var body struct {
-		ApproverID uint `json:"approver_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	entry, err := h.service.ApproveTimeEntry(id, body.ApproverID)
+	entry, err := h.service.ApproveTimeEntry(id, actor.id)
 	if err != nil {
-		util.InternalError(c, "Giriş onaylanamadı", err)
+		util.InternalError(c, "Giris onaylanamadi", err)
 		return
 	}
 
@@ -61,17 +58,14 @@ func (h *ApprovalHandler) RejectTimeEntry(c *gin.Context) {
 		return
 	}
 
-	var body struct {
-		ApproverID uint `json:"approver_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		util.BadRequest(c, "Geçersiz veri", err)
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	entry, err := h.service.RejectTimeEntry(id, body.ApproverID)
+	entry, err := h.service.RejectTimeEntry(id, actor.id)
 	if err != nil {
-		util.InternalError(c, "Giriş reddedilemedi", err)
+		util.InternalError(c, "Giris reddedilemedi", err)
 		return
 	}
 
@@ -92,13 +86,13 @@ func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 	if entityIDStr != "" {
 		entityID, err := strconv.ParseUint(entityIDStr, 10, 32)
 		if err != nil {
-			util.BadRequest(c, "Geçersiz entity_id", err)
+			util.BadRequest(c, "Gecersiz entity_id", err)
 			return
 		}
 
 		logs, err := h.service.GetAuditLogs(entityType, uint(entityID))
 		if err != nil {
-			util.InternalError(c, "Denetim günlükleri getirilemedi", err)
+			util.InternalError(c, "Denetim gunlukleri getirilemedi", err)
 			return
 		}
 		c.JSON(http.StatusOK, logs)
@@ -108,13 +102,13 @@ func (h *ApprovalHandler) GetAuditLogs(c *gin.Context) {
 	// No entity_id, get logs by date range
 	start, end, err := parseDateRange(c)
 	if err != nil {
-		util.BadRequest(c, "Tarih aralığı geçersiz", err)
+		util.BadRequest(c, "Tarih araligi gecersiz", err)
 		return
 	}
 
 	logs, err := h.service.GetAuditLogsByDateRange(start, end)
 	if err != nil {
-		util.InternalError(c, "Denetim günlükleri getirilemedi", err)
+		util.InternalError(c, "Denetim gunlukleri getirilemedi", err)
 		return
 	}
 

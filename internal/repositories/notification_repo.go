@@ -8,7 +8,7 @@ import (
 type NotificationRepositoryInterface interface {
 	Create(notification *core.Notification) error
 	GetUnreadByEmployee(employeeID uint) ([]core.Notification, error)
-	MarkAsRead(id uint) error
+	MarkAsReadForEmployee(id uint, employeeID uint) (bool, error)
 	MarkAllAsRead(employeeID uint) error
 }
 
@@ -32,8 +32,14 @@ func (r *NotificationRepository) GetUnreadByEmployee(employeeID uint) ([]core.No
 	return notifications, err
 }
 
-func (r *NotificationRepository) MarkAsRead(id uint) error {
-	return r.db.Model(&core.Notification{}).Where("id = ?", id).Update("is_read", true).Error
+func (r *NotificationRepository) MarkAsReadForEmployee(id uint, employeeID uint) (bool, error) {
+	result := r.db.Model(&core.Notification{}).
+		Where("id = ? AND employee_id = ?", id, employeeID).
+		Update("is_read", true)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }
 
 func (r *NotificationRepository) MarkAllAsRead(employeeID uint) error {

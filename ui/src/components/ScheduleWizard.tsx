@@ -45,7 +45,7 @@ const ScheduleWizard: React.FC<Props> = ({ onNavigate }) => {
         if (params.department_id > 0) {
             setLoadingEmployees(true);
             employeeApi.list().then(res => {
-                const deptEmployees = (res.data || []).filter(
+                const deptEmployees = (res.data.data || []).filter(
                     (e: Employee) =>
                         e.DepartmentID === params.department_id &&
                         e.IsActive &&

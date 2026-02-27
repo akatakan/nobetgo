@@ -8,9 +8,6 @@ export function NotificationBell() {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // Hardcoded for now, assuming current logged in user ID is 1 or something dynamic in real app
-    const currentUserId = 1;
-
     useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 60000); // Check every minute
@@ -19,7 +16,7 @@ export function NotificationBell() {
 
     const fetchNotifications = async () => {
         try {
-            const response = await notificationApi.getUnread(currentUserId);
+            const response = await notificationApi.getUnread();
             setNotifications(response.data || []);
         } catch (err) {
             console.error('Failed to load notifications', err);
@@ -39,7 +36,7 @@ export function NotificationBell() {
 
     const markAllAsRead = async () => {
         try {
-            await notificationApi.markAllAsRead(currentUserId);
+            await notificationApi.markAllAsRead();
             setNotifications([]);
             setIsOpen(false);
         } catch (err) {

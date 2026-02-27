@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/akatakan/nobetgo/internal/services"
+	"github.com/akatakan/nobetgo/util"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,17 +18,19 @@ func NewNotificationHandler(s *services.NotificationService) *NotificationHandle
 }
 
 func (h *NotificationHandler) GetUnread(c *gin.Context) {
-	// For MVP, employee ID is passed via query param (later via auth token)
-	empIDStr := c.Query("employee_id")
-	empID, err := strconv.ParseUint(empIDStr, 10, 32)
-	if err != nil || empID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçerli bir employee_id parametresi gereklidir"})
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	notifs, err := h.notifService.GetUnread(uint(empID))
+	employeeID, ok := resolveEmployeeAccess(c, actor, "employee_id", false)
+	if !ok {
+		return
+	}
+
+	notifs, err := h.notifService.GetUnread(employeeID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Bildirimler alınamadı"})
+		util.InternalError(c, "Bildirimler alinamadi", err)
 		return
 	}
 
@@ -38,31 +41,38 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Geçersiz bildirim ID"})
+		util.BadRequest(c, "Gecersiz bildirim ID", err)
 		return
 	}
 
-	if err := h.notifService.MarkAsRead(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Bildirim okundu olarak işaretlenemedi"})
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Bildirim okundu olarak işaretlendi"})
+	updated, err := h.notifService.MarkAsRead(uint(id), actor.id)
+	if err != nil {
+		util.InternalError(c, "Bildirim guncellenemedi", err)
+		return
+	}
+	if !updated {
+		util.JSONError(c, http.StatusNotFound, "Bildirim bulunamadi", nil)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Bildirim okundu olarak isaretlendi"})
 }
 
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
-	var input struct {
-		EmployeeID uint `json:"employee_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "employee_id parametresi gereklidir"})
+	actor, ok := getActingUser(c)
+	if !ok {
 		return
 	}
 
-	if err := h.notifService.MarkAllAsRead(input.EmployeeID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Bildirimler güncellenemedi"})
+	if err := h.notifService.MarkAllAsRead(actor.id); err != nil {
+		util.InternalError(c, "Bildirimler guncellenemedi", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Tüm bildirimler okundu olarak işaretlendi"})
+	c.JSON(http.StatusOK, gin.H{"message": "Tum bildirimler okundu olarak isaretlendi"})
 }
